@@ -1,27 +1,41 @@
-import { extractLinkedInJob, JOB_DESCRIPTION_SELECTOR } from './linkedin-extractor'
+import { descriptionFor, extractLinkedInJob, jobIdFromUrl } from './linkedin-extractor'
 
 const runtimeId = globalThis.chrome?.runtime?.id
 const contextAlive = () => Boolean(runtimeId && globalThis.chrome?.runtime?.id === runtimeId)
 
+/**
+ * The panel for the newly selected job is only mounted after LinkedIn swaps it in, and the previous
+ * job's panel can still be present meanwhile. Waiting for the id that matches the URL is what keeps
+ * one job's description from being saved under another job's URL.
+ */
+const readyFor = (jobId: string) => {
+  const description = descriptionFor(document, jobId)
+  return Boolean(description && (description.textContent || '').trim().length > 40)
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type !== 'JOBVAULT_EXTRACT_CURRENT_JOB_V2') return
+  const jobId = jobIdFromUrl(location.href)
   // Only inside the job panel: a page-wide search hits the "see more" of company feed posts instead.
-  const description = document.querySelector(`${JOB_DESCRIPTION_SELECTOR}, [class*="jobs-description"], [data-test-job-description], #job-details`)
-  const expand = [...(description?.querySelectorAll<HTMLElement>('button, [role="button"]') || [])]
+  const expand = [...(descriptionFor(document, jobId)?.querySelectorAll<HTMLElement>('button, [role="button"]') || [])]
     .find(button => /(更多|顯示更多|显示更多|see more|show more)/i.test(button.textContent?.trim() || ''))
   expand?.click()
   const respondWhenReady = (attempt = 0) => {
     if (!contextAlive()) return
-    const result = extractLinkedInJob()
-    if ((result.position || result.jd_text) || attempt >= 8) sendResponse(result)
-    else window.setTimeout(() => respondWhenReady(attempt + 1), 300)
+    if (readyFor(jobId) || attempt >= 20) sendResponse(extractLinkedInJob(document, jobId))
+    else window.setTimeout(() => respondWhenReady(attempt + 1), 150)
   }
-  window.setTimeout(() => respondWhenReady(), expand ? 600 : 0)
+  window.setTimeout(() => respondWhenReady(), expand ? 400 : 0)
   return true
 })
 
 let notifyTimer = 0
-let lastSignature = `${location.href}|${extractLinkedInJob().position}`
+// Keyed on the rendered panel, not on the URL: LinkedIn updates the URL before the panel catches up.
+const signature = () => {
+  const jobId = jobIdFromUrl(location.href)
+  return `${jobId}|${readyFor(jobId)}`
+}
+let lastSignature = signature()
 let stopped = false
 let observer: MutationObserver | null = null
 const originalPushState = history.pushState.bind(history)
@@ -36,9 +50,9 @@ const stop = () => {
 }
 const notifyIfChanged = () => {
   if (!contextAlive()) { stop(); return }
-  const signature = `${location.href}|${extractLinkedInJob().position}`
-  if (signature === lastSignature) return
-  lastSignature = signature
+  const current = signature()
+  if (current === lastSignature) return
+  lastSignature = current
   try {
     void chrome.runtime.sendMessage({ type: 'JOBVAULT_LINKEDIN_JOB_CHANGED' }).catch(stop)
   } catch {

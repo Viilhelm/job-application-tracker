@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { JSDOM } from 'jsdom'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { extractLinkedInJob } from './linkedin-extractor'
+import { extractLinkedInJob, jobIdFromUrl } from './linkedin-extractor'
 
 const aboutTheJobFixture = readFileSync(new URL('./__fixtures__/linkedin-about-the-job.html', import.meta.url), 'utf8')
 const topCardFixture = readFileSync(new URL('./__fixtures__/linkedin-top-card.html', import.meta.url), 'utf8')
@@ -130,6 +130,21 @@ describe('LinkedIn current-page extraction', () => {
       work_mode: 'Hybrid',
       employment_type: 'Full-time',
     })
+  })
+
+  it('reads the panel matching the current job, not a stale one left in the DOM', () => {
+    document.body.innerHTML = `
+      <div id="JobDetails_AboutTheJob_111"><p>Previous job still mounted.</p></div>
+      <div id="JobDetails_AboutTheJob_222"><p>Newly selected job.</p></div>`
+    expect(extractLinkedInJob(document, '222').jd_text).toBe('Newly selected job.')
+    expect(extractLinkedInJob(document, '111').jd_text).toBe('Previous job still mounted.')
+  })
+
+  it('reads the job id from both page shapes', () => {
+    expect(jobIdFromUrl('https://www.linkedin.com/jobs/view/4434382271/')).toBe('4434382271')
+    expect(jobIdFromUrl('https://www.linkedin.com/jobs/search-results/?currentJobId=4434382271&keywords=ai'))
+      .toBe('4434382271')
+    expect(jobIdFromUrl('https://www.linkedin.com/feed/')).toBe('')
   })
 
   it('collapses a repeated place name but keeps different administrative levels', () => {

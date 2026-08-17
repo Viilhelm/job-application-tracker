@@ -266,7 +266,19 @@ function fromJsonLd(root: ParentNode): Partial<ExtractedJob> {
   return {}
 }
 
-export function extractLinkedInJob(root: ParentNode = document): ExtractedJob {
+/** The panel id carries the job id, which is how a stale pane is told apart from the current one. */
+export function jobIdFromUrl(href: string): string {
+  const view = /\/jobs\/view\/(\d+)/.exec(href)?.[1]
+  if (view) return view
+  try { return new URL(href, 'https://www.linkedin.com').searchParams.get('currentJobId') || '' } catch { return '' }
+}
+
+export function descriptionFor(root: ParentNode, jobId: string): Element | null {
+  return (jobId && root.querySelector(`[id="JobDetails_AboutTheJob_${jobId}"]`))
+    || root.querySelector(JOB_DESCRIPTION_SELECTOR)
+}
+
+export function extractLinkedInJob(root: ParentNode = document, jobId = ''): ExtractedJob {
   const pageRoot = root
   root = jobDetailRoot(root)
   const structured = fromJsonLd(pageRoot)
@@ -274,7 +286,7 @@ export function extractLinkedInJob(root: ParentNode = document): ExtractedJob {
   const top = root.querySelector('.job-details-jobs-unified-top-card__container--two-pane, [class*="top-card"]') || root
   const metadata = text(top, ['[class*="top-card"] [class*="tertiary"]', '[class*="top-card"] [class*="primary-description"]', '.job-details-jobs-unified-top-card__tertiary-description-container', '.job-details-jobs-unified-top-card__primary-description-container', '.jobs-unified-top-card__bullet'])
   const ogDescription = meta(pageRoot, 'meta[property="og:description"]') || meta(pageRoot, 'meta[name="description"]')
-  const descriptionElement = pageRoot.querySelector(JOB_DESCRIPTION_SELECTOR) || root.querySelector(LEGACY_DESCRIPTION_SELECTOR) || aboutTheJobContainer(root)
+  const descriptionElement = descriptionFor(pageRoot, jobId) || root.querySelector(LEGACY_DESCRIPTION_SELECTOR) || aboutTheJobContainer(root)
   const card = readTopCard(topCardElement(pageRoot, descriptionElement))
   const extractedBlocks = descriptionElement ? descriptionBlocks(descriptionElement) : structured.jd_blocks || []
   const fallbackText = extractedBlocks.length ? '' : ogDescription
