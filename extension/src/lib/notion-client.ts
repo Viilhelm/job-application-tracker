@@ -1,7 +1,7 @@
 const API = 'https://api.notion.com/v1'
 const VERSION = '2026-03-11'
 
-export type NotionSettings = { token: string; parentPageId: string; databaseId: string; dataSourceId: string }
+export type NotionSettings = { token: string; parentPageId: string; databaseId: string; dataSourceId: string; mailDatabaseId: string; mailDataSourceId: string }
 
 export class NotionError extends Error {}
 
@@ -19,19 +19,21 @@ export function extractNotionId(value: string): string {
 export async function readSettings(): Promise<NotionSettings> {
   // The token is per-device and must not sync across browsers; ids are cheap to re-resolve.
   const secret = await chrome.storage.local.get({ token: '' })
-  const shared = await chrome.storage.sync.get({ parentPageId: '', databaseId: '', dataSourceId: '' })
+  const shared = await chrome.storage.sync.get({ parentPageId: '', databaseId: '', dataSourceId: '', mailDatabaseId: '', mailDataSourceId: '' })
   return {
     token: String(secret.token),
     parentPageId: String(shared.parentPageId),
     databaseId: String(shared.databaseId),
     dataSourceId: String(shared.dataSourceId),
+    mailDatabaseId: String(shared.mailDatabaseId),
+    mailDataSourceId: String(shared.mailDataSourceId),
   }
 }
 
 export async function writeSettings(values: Partial<NotionSettings>): Promise<void> {
   if ('token' in values) await chrome.storage.local.set({ token: values.token })
   const shared = Object.fromEntries(
-    (['parentPageId', 'databaseId', 'dataSourceId'] as const)
+    (['parentPageId', 'databaseId', 'dataSourceId', 'mailDatabaseId', 'mailDataSourceId'] as const)
       .filter(key => key in values).map(key => [key, values[key]])
   )
   if (Object.keys(shared).length) await chrome.storage.sync.set(shared)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from './domain'
 import { extractNotionId } from './notion-client'
-import { emailChildren, jdChildren, splitWorkMode, type NotionBlock, type NotionRichText } from './notion'
+import { jdChildren, messageChildren, splitWorkMode, type NotionBlock, type NotionRichText } from './notion'
 
 const typeOf = (block: NotionBlock) => block.type
 const bodyOf = (block: NotionBlock) => (block as Record<string, { rich_text: NotionRichText[] }>)[block.type].rich_text
@@ -49,7 +49,7 @@ describe('JD page body', () => {
   })
 })
 
-describe('Email timeline entry', () => {
+describe('Captured message body', () => {
   const email = {
     from: 'Ariane van der Haegen', address: 'ariane@kartesia.com',
     subject: 'Your application', sentAt: '2026-08-16T09:12:00Z',
@@ -59,35 +59,28 @@ describe('Email timeline entry', () => {
     ],
   }
 
-  it('is fenced off from the job description by a rule and its own heading', () => {
-    const blocks = emailChildren(email, true)
-    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_1', 'heading_2', 'paragraph', 'paragraph', 'paragraph'])
-    expect(bodyOf(blocks[1])[0].text.content).toBe('Correspondence')
-    expect(bodyOf(blocks[2])[0].text.content).toBe('Your application')
-    expect(bodyOf(blocks[3])[0].text.content)
-      .toBe('From: Ariane van der Haegen <ariane@kartesia.com>\nReceived: 2026-08-16T09:12:00Z')
-  })
-
-  it('joins the existing section instead of opening a second one', () => {
-    const blocks = emailChildren(email)
-    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_2', 'paragraph', 'paragraph', 'paragraph'])
-    expect(blocks.some(block => typeOf(block) === 'heading_1')).toBe(false)
-  })
-
-  it('keeps the body verbatim, in order', () => {
-    expect(emailChildren(email).slice(3).map(block => bodyOf(block)[0].text.content))
+  it('is the message alone, since subject and sender are properties of the record', () => {
+    const blocks = messageChildren(email)
+    expect(blocks.map(typeOf)).toEqual(['paragraph', 'paragraph'])
+    expect(blocks.map(block => bodyOf(block)[0].text.content))
       .toEqual(['Thank you for applying.', 'We are looking for a Dutch speaker.'])
   })
 
   it('falls back to plain text when a client exposes no structure', () => {
-    const blocks = emailChildren({ ...email, blocks: [], text: 'First line.\n\nSecond line.' })
-    expect(blocks.slice(3).map(block => bodyOf(block)[0].text.content)).toEqual(['First line.', 'Second line.'])
+    const blocks = messageChildren({ ...email, blocks: [], text: 'First line.\n\nSecond line.' })
+    expect(blocks.map(block => bodyOf(block)[0].text.content)).toEqual(['First line.', 'Second line.'])
   })
 
-  it('still writes an entry when the sender could not be read', () => {
-    const blocks = emailChildren({ ...email, from: '', address: '', sentAt: '', subject: '' })
-    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_2', 'paragraph', 'paragraph'])
-    expect(bodyOf(blocks[1])[0].text.content).toBe('(no subject)')
+  it('keeps a link and bold from the message', () => {
+    const blocks = messageChildren({ ...email, blocks: [{
+      type: 'paragraph', text: 'Reply to our team soon',
+      spans: [{ text: 'Reply to ' }, { text: 'our team', href: 'https://hero.example/contact' }, { text: ' soon', bold: true }],
+    }] })
+    expect(bodyOf(blocks[0])).toEqual([
+      { type: 'text', text: { content: 'Reply to ' } },
+      { type: 'text', text: { content: 'our team', link: { url: 'https://hero.example/contact' } } },
+      { type: 'text', text: { content: ' soon' }, annotations: { bold: true } },
+    ])
   })
 })
 

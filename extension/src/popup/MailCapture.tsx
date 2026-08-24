@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { REJECTION_REASONS, type CapturedEmail, type SavedJob } from '../lib/domain'
 import { matchJob } from '../lib/match'
-import { appendEmail, listJobs } from '../lib/notion'
+import { listJobs, saveEmail } from '../lib/notion'
 
 export function MailCapture({ email }: { email: CapturedEmail }) {
   const [jobs, setJobs] = useState<SavedJob[]>([])
@@ -10,6 +10,7 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
   const [matchReason, setMatchReason] = useState('')
   const [reason, setReason] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'saved' | 'error'>('loading')
+  const [savedUrl, setSavedUrl] = useState('')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
     event.preventDefault()
     setState('saving'); setMessage('')
     try {
-      await appendEmail(pick, email, reason)
+      setSavedUrl(await saveEmail(pick, email, reason))
       setState('saved')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not save the email')
@@ -62,7 +63,8 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
 
     {state === 'saved'
       ? <div className="message">Saved to {picked ? `${picked.company} — ${picked.position}` : 'Notion'}.
-          {picked && <> <a href={picked.url} target="_blank" rel="noreferrer">Open in Notion ↗</a></>}
+          {savedUrl && <> <a href={savedUrl} target="_blank" rel="noreferrer">Open the message ↗</a></>}
+          {picked && <> · <a href={picked.url} target="_blank" rel="noreferrer">Open the application ↗</a></>}
         </div>
       : <form onSubmit={save}>
           <label>Attach to

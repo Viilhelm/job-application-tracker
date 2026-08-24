@@ -60,6 +60,8 @@ The rejection reason is a select the user picks, and the message is stored verba
 
 A date is converted only when it is year-first and therefore unambiguous. `8/9/2026` is August or September depending on locale, and a silently wrong date is worse in a timeline than no date; otherwise the raw string is kept in the entry and the capture time stamps the property.
 
+Messages are records in their own **Correspondence** database, related to the job row, rather than blocks appended to the job page. A Notion property cannot hold a message at all — 2000 characters, no structure, single value — and appending to the page made every message read as more job description. As records they can also be grouped across applications, which is what makes "every rejection citing a language requirement" answerable.
+
 The application is preselected by matching the sender's domain, then the subject, then the message text, against saved company names. Matching an extracted name against records the user already created is not a judgement about the message; the panel states which signal matched and the choice stays editable, so a wrong guess is visible rather than silent.
 
 The cost is real: the extension now holds host permissions for two mail providers, which Chrome presents as the ability to read all mail on those domains. It reads one open message, on demand, and never enumerates a mailbox.

@@ -150,24 +150,25 @@ Source URL: <stable URL>
 
 Text longer than the Notion rich-text limit is chunked without discarding content.
 
-## Correspondence on the job page
+## Correspondence database
 
-Captured messages append to the same page under a second top-level section, because a Notion property caps at 2000 characters and cannot hold headings, lists or bold — a message would arrive flattened, and a second message would overwrite the first.
+Captured messages are records, not page content. A Notion property cannot hold a message — `rich_text` caps at 2000 characters, flattens headings, lists and bold, and a second message would overwrite the first — and appending to the job page made the timeline read as more job description.
 
-```text
-# Job Description Snapshot
-<the JD>
----
-# Correspondence
-## <subject>
-From: <name> <address>
-Received: <as the client displayed it>
-<the message, verbatim>
----
-## <next subject>
-```
+A second database, **Correspondence**, is created next to Job Applications on the first saved message and cached in `chrome.storage.sync`:
 
-`appendEmail` reads the page's existing children before writing and only emits the `Correspondence` heading when it is absent, so later messages join the section rather than opening another one. Every entry starts with a rule.
+| Property | Type |
+|---|---|
+| Subject | Title |
+| From | Text |
+| From Email | Email |
+| Received | Date |
+| Application | Relation to Job Applications (dual) |
+
+The relation is `dual_property`, so Notion creates the matching property on Job Applications itself; the job row then links to every message under it. The message body is the page content of its own record, with links and bold intact.
+
+Job Applications still carries `Contact Email`, `Last Contact` and `Rejection Reason`, because those describe the application rather than any one message. `Last Contact` uses the parsed date when it was unambiguous and the capture time otherwise.
+
+Settings exposes the Correspondence database id the same way as the jobs database, so clearing extension storage cannot silently create a duplicate.
 
 ## Document uploads
 

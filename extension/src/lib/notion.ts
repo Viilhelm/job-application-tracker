@@ -134,26 +134,97 @@ async function ensureProperties(token: string, id: string, names: string[]): Pro
 
 export const CORRESPONDENCE = 'Correspondence'
 
-/** A rule and its own top-level heading keep the timeline from reading as more job description. */
-export function emailChildren(email: CapturedEmail, startSection = false): NotionBlock[] {
-  const sender = email.address ? `${email.from} <${email.address}>` : email.from
-  const received = [sender && `From: ${sender}`, email.sentAt && `Received: ${email.sentAt}`].filter(Boolean).join('\n')
-  const blocks: NotionBlock[] = [{ object: 'block', type: 'divider', divider: {} }]
-  if (startSection) {
-    blocks.push({ object: 'block', type: 'heading_1', heading_1: { rich_text: richText([{ text: CORRESPONDENCE }]) } })
-  }
-  blocks.push(
-    { object: 'block', type: 'heading_2', heading_2: { rich_text: richText([{ text: email.subject || '(no subject)' }]) } },
-  )
-  if (received) blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: richText([{ text: received }]) } })
+/** The message body only; subject, sender and date are properties of the record itself. */
+export function messageChildren(email: CapturedEmail): NotionBlock[] {
   const body: JdBlock[] = email.blocks.length
     ? email.blocks
     : email.text.split(/\n\s*\n/).map(text => text.trim()).filter(Boolean).map(text => ({ type: 'paragraph', text }))
-  for (const block of body) {
-    const spans = block.spans?.length ? block.spans : [{ text: block.text.trim() }]
-    blocks.push({ object: 'block', type: block.type, [block.type]: { rich_text: richText(spans) } })
+  return body.map(block => ({
+    object: 'block' as const,
+    type: block.type,
+    [block.type]: { rich_text: richText(block.spans?.length ? block.spans : [{ text: block.text.trim() }]) },
+  }))
+}
+
+const CORRESPONDENCE_PROPERTIES = (jobsDataSourceId: string): Record<string, unknown> => ({
+  'Subject': { title: {} },
+  'From': { rich_text: {} },
+  'From Email': { email: {} },
+  'Received': { date: {} },
+  // A dual relation makes Notion create the matching property on Job Applications automatically.
+  'Application': { relation: { data_source_id: jobsDataSourceId, type: 'dual_property', dual_property: {} } },
+})
+
+async function parentPageFor(token: string, databaseId: string, fallback: string): Promise<string> {
+  try {
+    const database = await notionRequest<{ parent?: { page_id?: string } }>(token, 'GET', `/databases/${databaseId}`)
+    return database.parent?.page_id || fallback
+  } catch { return fallback }
+}
+
+/** Messages live in their own database so a job page keeps only its description. */
+async function correspondenceSource(): Promise<{ token: string; id: string }> {
+  const settings = await readSettings()
+  const jobs = await dataSource()
+  if (settings.mailDataSourceId) return { token: jobs.token, id: settings.mailDataSourceId }
+
+  if (settings.mailDatabaseId) {
+    const database = await notionRequest<{ data_sources?: { id: string }[] }>(jobs.token, 'GET', `/databases/${settings.mailDatabaseId}`)
+    const id = database.data_sources?.[0]?.id
+    if (!id) throw new NotionError('That Correspondence database has no data source.')
+    await writeSettings({ mailDataSourceId: id })
+    return { token: jobs.token, id }
   }
-  return blocks
+
+  const parent = await parentPageFor(jobs.token, settings.databaseId, settings.parentPageId)
+  if (!parent) throw new NotionError('Open Settings and add a parent page so the Correspondence database can be created.')
+  const created = await notionRequest<{ id: string; data_sources?: { id: string }[] }>(jobs.token, 'POST', '/databases', {
+    parent: { type: 'page_id', page_id: parent },
+    title: [{ type: 'text', text: { content: CORRESPONDENCE } }],
+    icon: { type: 'emoji', emoji: '✉️' },
+    is_inline: false,
+    initial_data_source: {
+      title: [{ type: 'text', text: { content: CORRESPONDENCE } }],
+      properties: CORRESPONDENCE_PROPERTIES(jobs.id),
+    },
+  })
+  const id = created.data_sources?.[0]?.id
+  if (!id) throw new NotionError('Notion created the Correspondence database without a data source.')
+  await writeSettings({ mailDatabaseId: created.id, mailDataSourceId: id })
+  return { token: jobs.token, id }
+}
+
+export async function saveEmail(jobPageId: string, email: CapturedEmail, rejectionReason = ''): Promise<string> {
+  const jobs = await dataSource()
+  await ensureProperties(jobs.token, jobs.id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
+  const mail = await correspondenceSource()
+
+  const received = email.sentAtIso || new Date().toISOString()
+  const properties: Record<string, unknown> = {
+    'Subject': { title: [{ text: { content: email.subject || '(no subject)' } }] },
+    'Received': { date: { start: received } },
+    'Application': { relation: [{ id: jobPageId }] },
+  }
+  if (email.from) properties['From'] = { rich_text: [{ text: { content: email.from } }] }
+  if (email.address) properties['From Email'] = { email: email.address }
+
+  const children = messageChildren(email)
+  const page = await notionRequest<NotionPage>(mail.token, 'POST', '/pages', {
+    parent: { type: 'data_source_id', data_source_id: mail.id },
+    properties,
+    children: children.slice(0, 100),
+  })
+  for (let index = 100; index < children.length; index += 100) {
+    await notionRequest(mail.token, 'PATCH', `/blocks/${page.id}/children`, { children: children.slice(index, index + 100) })
+  }
+
+  const jobProperties: Record<string, unknown> = { 'Last Contact': { date: { start: received } } }
+  if (email.address) jobProperties['Contact Email'] = { email: email.address }
+  if (rejectionReason && REJECTION_REASONS.includes(rejectionReason as typeof REJECTION_REASONS[number])) {
+    jobProperties['Rejection Reason'] = { select: { name: rejectionReason } }
+  }
+  await notionRequest(jobs.token, 'PATCH', `/pages/${jobPageId}`, { properties: jobProperties })
+  return page.url
 }
 
 /** The picker needs enough to recognize a job; the full row is never loaded. */
@@ -170,42 +241,6 @@ export async function listJobs(): Promise<SavedJob[]> {
     position: plain(page, 'Position'),
     status: page.properties?.Status?.select?.name || '',
   }))
-}
-
-/** The heading is written once; later messages join the section instead of opening a new one. */
-async function hasSection(token: string, pageId: string, title: string): Promise<boolean> {
-  let cursor: string | undefined
-  do {
-    const path = `/blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ''}`
-    const page = await notionRequest<{
-      results: { type: string; heading_1?: { rich_text: { plain_text?: string }[] } }[]
-      has_more?: boolean; next_cursor?: string | null
-    }>(token, 'GET', path)
-    const found = page.results.some(block => block.type === 'heading_1'
-      && (block.heading_1?.rich_text || []).map(part => part.plain_text || '').join('').trim() === title)
-    if (found) return true
-    cursor = page.has_more ? page.next_cursor || undefined : undefined
-  } while (cursor)
-  return false
-}
-
-export async function appendEmail(pageId: string, email: CapturedEmail, rejectionReason = ''): Promise<void> {
-  const { token, id } = await dataSource()
-  await ensureProperties(token, id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
-
-  const children = emailChildren(email, !await hasSection(token, pageId, CORRESPONDENCE))
-  for (let index = 0; index < children.length; index += 100) {
-    await notionRequest(token, 'PATCH', `/blocks/${pageId}/children`, { children: children.slice(index, index + 100) })
-  }
-
-  const properties: Record<string, unknown> = {}
-  if (email.address) properties['Contact Email'] = { email: email.address }
-  // Only a date parsed unambiguously is trusted; otherwise the capture time is the honest stamp.
-  properties['Last Contact'] = { date: { start: email.sentAtIso || new Date().toISOString() } }
-  if (rejectionReason && REJECTION_REASONS.includes(rejectionReason as typeof REJECTION_REASONS[number])) {
-    properties['Rejection Reason'] = { select: { name: rejectionReason } }
-  }
-  if (Object.keys(properties).length) await notionRequest(token, 'PATCH', `/pages/${pageId}`, { properties })
 }
 
 export async function lookupJob(url: string): Promise<JobResponse | null> {
