@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { REJECTION_REASONS, type CapturedEmail, type SavedJob } from '../lib/domain'
 import { matchJob } from '../lib/match'
-import { listJobs, saveEmail } from '../lib/notion'
+import { findMessage, listJobs, saveEmail } from '../lib/notion'
 
 export function MailCapture({ email }: { email: CapturedEmail }) {
   const [jobs, setJobs] = useState<SavedJob[]>([])
@@ -9,14 +9,16 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
   const [pick, setPick] = useState('')
   const [matchReason, setMatchReason] = useState('')
   const [reason, setReason] = useState('')
-  const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'saved' | 'error'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'saved' | 'filed' | 'error'>('loading')
   const [savedUrl, setSavedUrl] = useState('')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
-    listJobs()
-      .then(found => {
+    // Filing the same message twice would create a second record, so identity is checked first.
+    Promise.all([findMessage(email), listJobs()])
+      .then(([already, found]) => {
         setJobs(found)
+        if (already) { setSavedUrl(already); setState('filed'); return }
         // Preselected, never auto-saved: the reason is shown so a wrong guess is obvious.
         const matched = matchJob(email, found)
         if (matched) { setPick(matched.job.id); setMatchReason(matched.reason) }
@@ -61,7 +63,11 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
     </div>
     <p className="mail-preview">{preview}{preview.length >= 240 ? '…' : ''}</p>
 
-    {state === 'saved'
+    {state === 'filed'
+      ? <div className="existing"><span>Already filed</span>
+          <a href={savedUrl} target="_blank" rel="noreferrer">Open the record ↗</a>
+        </div>
+      : state === 'saved'
       ? <div className="message">Saved to {picked ? `${picked.company} — ${picked.position}` : 'Notion'}.
           {savedUrl && <> <a href={savedUrl} target="_blank" rel="noreferrer">Open the message ↗</a></>}
           {picked && <> · <a href={picked.url} target="_blank" rel="noreferrer">Open the application ↗</a></>}

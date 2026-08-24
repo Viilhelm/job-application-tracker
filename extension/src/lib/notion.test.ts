@@ -51,7 +51,7 @@ describe('JD page body', () => {
 
 describe('Captured message body', () => {
   const email = {
-    from: 'Ariane van der Haegen', address: 'ariane@kartesia.com',
+    messageId: 'AAkALgAA', from: 'Ariane van der Haegen', address: 'ariane@kartesia.com',
     subject: 'Your application', sentAt: '2026-08-16T09:12:00Z',
     text: '', sentAtIso: '2026-08-16T09:12:00.000Z', blocks: [
       { type: 'paragraph' as const, text: 'Thank you for applying.' },

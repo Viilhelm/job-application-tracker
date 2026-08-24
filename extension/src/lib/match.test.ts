@@ -6,7 +6,7 @@ const job = (company: string, position = 'Engineer'): SavedJob =>
   ({ id: company, company, position, status: 'Applied', url: 'https://notion.so/x' })
 
 const email = (overrides: Partial<CapturedEmail>): CapturedEmail => ({
-  from: '', address: '', subject: '', sentAt: '', sentAtIso: '', text: '', blocks: [], ...overrides,
+  messageId: 'm1', from: '', address: '', subject: '', sentAt: '', sentAtIso: '', text: '', blocks: [], ...overrides,
 })
 
 const jobs = [job('Hero'), job('InnoWave'), job('Northwind Ltd'), job('Google')]

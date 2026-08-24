@@ -46,6 +46,7 @@ describe('Outlook reading pane', () => {
     expect(email.address).toBe('talent@northwind.example')
     expect(email.sentAt).toBe('周一 2026/8/24 6:48')
     expect(email.sentAtIso).toContain('2026-08-24')
+    expect(email.messageId).toBe('gAJXTpasgAA')
     expect(email.blocks[0].text).toBe('Dear Alex,')
     expect(email.blocks.at(-1)!.text).toBe('Reply to talent-noreply@northwind.example if needed.')
   })
@@ -67,6 +68,7 @@ describe('Gmail thread', () => {
     expect(email.from).toBe('Northwind Careers')
     expect(email.address).toBe('talent@northwind.example')
     expect(email.sentAt).toBe('2026年8月24日 上午6:48')
+    expect(email.messageId).toBe('#msg-f:1874339771490096834')
     expect(email.blocks.map(block => block.text)).toEqual([
       'Hi Alex,',
       'Thank you for your interest in the AI Engineer role.',
@@ -74,6 +76,15 @@ describe('Gmail thread', () => {
       'Best,',
       'The Northwind Team',
     ])
+  })
+})
+
+describe('Message identity', () => {
+  it('falls back to sender, subject and date when the client exposes no id', () => {
+    document.body.innerHTML = `<div role="main"><h2>Interview invitation</h2>
+      <div class="a3s"><p>Are you free on Tuesday?</p></div>
+      <span>Sam Rivers&lt;talent@northwind.example&gt;</span></div>`
+    expect(extractEmail(document, 'gmail')!.messageId).toBe('talent@northwind.example|Interview invitation')
   })
 })
 

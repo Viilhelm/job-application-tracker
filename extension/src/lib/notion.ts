@@ -123,12 +123,14 @@ async function dataSource(): Promise<{ token: string; id: string }> {
 }
 
 /** A database created before a property existed has to gain it before anything writes to it. */
-async function ensureProperties(token: string, id: string, names: string[]): Promise<void> {
+async function ensureProperties(
+  token: string, id: string, names: string[], definitions: Record<string, unknown> = DATABASE_PROPERTIES,
+): Promise<void> {
   const source = await notionRequest<{ properties: Record<string, unknown> }>(token, 'GET', `/data_sources/${id}`)
   const missing = names.filter(name => !(name in source.properties))
   if (!missing.length) return
   await notionRequest(token, 'PATCH', `/data_sources/${id}`, {
-    properties: Object.fromEntries(missing.map(name => [name, DATABASE_PROPERTIES[name]])),
+    properties: Object.fromEntries(missing.map(name => [name, definitions[name]])),
   })
 }
 
@@ -148,6 +150,8 @@ export function messageChildren(email: CapturedEmail): NotionBlock[] {
 
 const CORRESPONDENCE_PROPERTIES = (jobsDataSourceId: string): Record<string, unknown> => ({
   'Subject': { title: {} },
+  // Identity, so reopening the panel on a message already filed cannot create a second record.
+  'Message ID': { rich_text: {} },
   'From': { rich_text: {} },
   'From Email': { email: {} },
   'Received': { date: {} },
@@ -194,14 +198,29 @@ async function correspondenceSource(): Promise<{ token: string; id: string }> {
   return { token: jobs.token, id }
 }
 
+/** Returns the record's URL when this message is already filed, so the panel can say so. */
+export async function findMessage(email: CapturedEmail): Promise<string | null> {
+  if (!email.messageId) return null
+  const mail = await correspondenceSource()
+  const found = await notionRequest<QueryResult>(mail.token, 'POST', `/data_sources/${mail.id}/query`, {
+    filter: { property: 'Message ID', rich_text: { equals: email.messageId } },
+    page_size: 1,
+  })
+  return found.results.length ? found.results[0].url : null
+}
+
 export async function saveEmail(jobPageId: string, email: CapturedEmail, rejectionReason = ''): Promise<string> {
+  const existing = await findMessage(email)
+  if (existing) return existing
   const jobs = await dataSource()
   await ensureProperties(jobs.token, jobs.id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
   const mail = await correspondenceSource()
+  await ensureProperties(mail.token, mail.id, ['Message ID'], CORRESPONDENCE_PROPERTIES(jobs.id))
 
   const received = email.sentAtIso || new Date().toISOString()
   const properties: Record<string, unknown> = {
     'Subject': { title: [{ text: { content: email.subject || '(no subject)' } }] },
+    'Message ID': { rich_text: [{ text: { content: email.messageId } }] },
     'Received': { date: { start: received } },
     'Application': { relation: [{ id: jobPageId }] },
   }

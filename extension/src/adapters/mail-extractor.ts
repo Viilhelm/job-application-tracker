@@ -69,6 +69,18 @@ function findSentAt(pane: Element, client: Exclude<MailClient, ''>): string {
   return clean(dated) || clean(pane.querySelector('span[class~="g3"]')?.textContent)
 }
 
+/**
+ * Both clients expose a per-message id. Without one a message would be filed again every time the
+ * panel is opened, so a subject/sender/date key stands in and is still stable for the same message.
+ */
+function messageIdIn(pane: Element, client: Exclude<MailClient, ''>, fallback: string[]): string {
+  const native = client === 'outlook'
+    ? /^MSG_(.+?)_[A-Z]+$/.exec(pane.querySelector('[id^="MSG_"]')?.id || '')?.[1]
+    : pane.querySelector('[data-message-id]')?.getAttribute('data-message-id')
+      || pane.querySelector('[data-legacy-message-id]')?.getAttribute('data-legacy-message-id')
+  return clean(native) || fallback.filter(Boolean).join('|')
+}
+
 export function extractEmail(root: ParentNode = document, client: MailClient): CapturedEmail | null {
   if (!client) return null
   const pane = root.querySelector(PANES[client])
@@ -80,8 +92,10 @@ export function extractEmail(root: ParentNode = document, client: MailClient): C
     .filter(node => !body.contains(node))
     .map(node => clean(node.textContent)).find(Boolean) || ''
   const sentAt = findSentAt(pane, client)
+  const sender = findSender(pane, body)
   return {
-    ...findSender(pane, body),
+    ...sender,
+    messageId: messageIdIn(pane, client, [sender.address, subject, sentAt]),
     subject,
     sentAt,
     sentAtIso: toIsoDate(sentAt),
