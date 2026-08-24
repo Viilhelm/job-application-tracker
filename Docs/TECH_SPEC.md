@@ -12,7 +12,7 @@ Chrome/Edge side panel (React + TypeScript)
 Job Applications database + job page blocks + uploaded files
 ```
 
-Gmail and Outlook tabs carry a second content script feeding the same panel, which appends the open message to a job page the user picks.
+Gmail and Outlook tabs carry a second content script feeding the same panel, which files the open message as a Correspondence record related to a job the user picks.
 
 There is no server. Extension pages carry `host_permissions` for `https://api.notion.com/*`, which exempts their requests from CORS; content scripts cannot do this, so every Notion call happens in the panel, never in the LinkedIn page.
 
@@ -118,7 +118,7 @@ The Outlook and Gmail fixtures are reconstructions of captured structure with th
 
 ## Notion operations
 
-`src/lib/notion.ts` exposes `lookupJob`, `createJob`, `updateJob`, `uploadDocument`, `listJobs`, `appendEmail` and `migrateWorkMode`; `src/lib/notion-client.ts` holds the token, the request wrapper and error shaping.
+`src/lib/notion.ts` exposes `lookupJob`, `createJob`, `updateJob`, `uploadDocument`, `listJobs`, `findMessage`, `saveEmail` and `migrateWorkMode`; `src/lib/notion-client.ts` holds the token, the request wrapper and error shaping.
 
 Duplicate creation is prevented by a data-source query on Canonical URL. Existing jobs are returned rather than overwritten; replacing an existing JD requires a future explicit action.
 
