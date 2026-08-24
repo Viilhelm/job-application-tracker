@@ -95,12 +95,16 @@ describe('LinkedIn current-page extraction', () => {
     expect(result.jd_blocks.filter(block => block.type === 'heading_2').map(block => block.text)).toEqual([
       'Missions', 'Required Qualifications', 'Preferred Qualifications',
     ])
-    expect(result.jd_blocks.slice(0, 4)).toEqual([
+    expect(result.jd_blocks.slice(0, 4).map(block => ({ type: block.type, text: block.text }))).toEqual([
       { type: 'paragraph', text: 'NXP Semiconductors is seeking a New Graduate Agentic AI Software Engineer to join our AI software development organization. In this role, you will contribute to the development of agent‑based AI software solutions leveraging state‑of‑the‑art foundation models and modern software engineering practices.' },
       { type: 'paragraph', text: 'You will work as part of a multidisciplinary team to design, implement, and validate AI software components that enable intelligent, autonomous, and scalable systems.' },
       { type: 'heading_2', text: 'Missions' },
       { type: 'bulleted_list_item', text: 'Design, develop, and maintain agentic AI software components under guidance from senior engineers' },
     ])
+    // Bold inside a sentence survives as an annotation; the joined spans still rebuild the text.
+    expect(result.jd_blocks[0].spans!.filter(span => span.bold).map(span => span.text))
+      .toEqual(['New Graduate Agentic AI Software Engineer', 'agent‑based AI software solutions'])
+    expect(result.jd_blocks[0].spans!.map(span => span.text).join('')).toBe(result.jd_blocks[0].text)
     expect(result.jd_blocks.at(-1)).toEqual({
       type: 'paragraph',
       text: 'More information about NXP in France...',

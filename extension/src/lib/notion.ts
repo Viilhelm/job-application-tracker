@@ -36,7 +36,7 @@ const DOCUMENT_PROPERTIES: Record<string, string> = {
   other: 'Other Documents',
 }
 
-export type NotionRichText = { type: 'text'; text: { content: string; link?: { url: string } } }
+export type NotionRichText = { type: 'text'; text: { content: string; link?: { url: string } }; annotations?: { bold: true } }
 export type NotionBlock = { object: 'block'; type: string } & Record<string, unknown>
 type NotionProperty = {
   rich_text?: { plain_text?: string }[]
@@ -71,7 +71,7 @@ function richText(spans: JdSpan[]): NotionRichText[] {
     for (let index = 0; index < span.text.length; index += 2000) {
       const text: NotionRichText['text'] = { content: span.text.slice(index, index + 2000) }
       if (span.href?.startsWith('http')) text.link = { url: span.href }
-      items.push({ type: 'text', text })
+      items.push(span.bold ? { type: 'text', text, annotations: { bold: true } } : { type: 'text', text })
     }
   }
   return items.slice(0, 100)

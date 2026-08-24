@@ -21,8 +21,8 @@ function collapseParts(parts: JdSpan[]): { text: string; spans: JdSpan[] } {
     if (!value) continue
     text += value
     const previous = spans.at(-1)
-    if (previous && previous.href === part.href) previous.text += value
-    else spans.push({ text: value, href: part.href })
+    if (previous && previous.href === part.href && previous.bold === part.bold) previous.text += value
+    else spans.push({ text: value, ...(part.href ? { href: part.href } : {}), ...(part.bold ? { bold: true } : {}) })
   }
   return { text, spans }
 }
@@ -34,7 +34,7 @@ function truncateSpans(spans: JdSpan[], length: number): JdSpan[] {
     if (used >= length) break
     const text = span.text.slice(0, length - used)
     used += text.length
-    kept.push({ text, href: span.href })
+    kept.push({ text, ...(span.href ? { href: span.href } : {}), ...(span.bold ? { bold: true } : {}) })
   }
   return kept
 }
@@ -47,9 +47,13 @@ function flush(cursor: Cursor, forced?: JdBlock['type']): void {
   cursor.strong = 0
   cursor.plain = 0
   if (!text) return
-  const type = forced || cursor.list || (emphasised && text.length <= 120 ? 'heading_2' : 'paragraph')
+  const heading = emphasised && text.length <= 120
+  const type = forced || cursor.list || (heading ? 'heading_2' : 'paragraph')
+  // A line that became a heading because it was entirely bold does not also need bold spans.
   const spans = truncateSpans(collapsed.spans, text.length)
-  cursor.blocks.push(spans.some(span => span.href) ? { type, text, spans } : { type, text })
+    .map(span => (heading && !forced ? { ...span, bold: undefined } : span))
+    .map(span => (span.bold ? span : { text: span.text, ...(span.href ? { href: span.href } : {}) }))
+  cursor.blocks.push(spans.some(span => span.href || span.bold) ? { type, text, spans } : { type, text })
 }
 
 /** LinkedIn wraps outbound links in a tracked /safety/go redirect; store the destination instead. */
@@ -65,7 +69,7 @@ function resolveHref(value: string | null): string | undefined {
 function walkDescription(node: Node, cursor: Cursor, strongDepth: number, href?: string): void {
   if (node.nodeType === Node.TEXT_NODE) {
     const value = node.textContent || ''
-    cursor.parts.push({ text: value, href })
+    cursor.parts.push({ text: value, href, bold: strongDepth > 0 })
     if (strongDepth > 0) cursor.strong += clean(value).length
     else cursor.plain += clean(value).length
     return

@@ -1,26 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { REJECTION_REASONS, type CapturedEmail, type SavedJob } from '../lib/domain'
+import { matchJob } from '../lib/match'
 import { appendEmail, listJobs } from '../lib/notion'
 
 export function MailCapture({ email }: { email: CapturedEmail }) {
   const [jobs, setJobs] = useState<SavedJob[]>([])
   const [filter, setFilter] = useState('')
   const [pick, setPick] = useState('')
+  const [matchReason, setMatchReason] = useState('')
   const [reason, setReason] = useState('')
   const [state, setState] = useState<'loading' | 'ready' | 'saving' | 'saved' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
   useEffect(() => {
     listJobs()
-      .then(found => { setJobs(found); setState('ready') })
+      .then(found => {
+        setJobs(found)
+        // Preselected, never auto-saved: the reason is shown so a wrong guess is obvious.
+        const matched = matchJob(email, found)
+        if (matched) { setPick(matched.job.id); setMatchReason(matched.reason) }
+        setState('ready')
+      })
       .catch(error => { setMessage(error instanceof Error ? error.message : 'Could not read Notion'); setState('error') })
-  }, [])
+  }, [email])
 
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase()
-    if (!needle) return jobs.slice(0, 40)
-    return jobs.filter(job => `${job.company} ${job.position} ${job.status}`.toLowerCase().includes(needle)).slice(0, 40)
-  }, [jobs, filter])
+    const matching = needle
+      ? jobs.filter(job => `${job.company} ${job.position} ${job.status}`.toLowerCase().includes(needle))
+      : jobs
+    const list = matching.slice(0, 40)
+    // The chosen application stays in the list, or filtering would silently blank the selection.
+    const chosen = jobs.find(job => job.id === pick)
+    return chosen && !list.some(job => job.id === chosen.id) ? [chosen, ...list] : list
+  }, [jobs, filter, pick])
 
   const picked = jobs.find(job => job.id === pick)
 
@@ -52,17 +65,18 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
           {picked && <> <a href={picked.url} target="_blank" rel="noreferrer">Open in Notion ↗</a></>}
         </div>
       : <form onSubmit={save}>
-          <label>Find the application
-            <input type="search" value={filter} placeholder="Company or position…"
-              onChange={event => setFilter(event.target.value)}/>
-          </label>
           <label>Attach to
-            <select required value={pick} onChange={event => setPick(event.target.value)}>
+            <select required value={pick} onChange={event => { setPick(event.target.value); setMatchReason('') }}>
               <option value="">{state === 'loading' ? 'Loading saved jobs…' : 'Choose an application'}</option>
               {shown.map(job => <option key={job.id} value={job.id}>
                 {job.company} — {job.position}{job.status ? ` (${job.status})` : ''}
               </option>)}
             </select>
+          </label>
+          {matchReason && <p className="match-reason">Preselected from the {matchReason}. Change it above if that is not the right application.</p>}
+          <label>Narrow the list <span className="optional">only if the application is not in it</span>
+            <input type="search" value={filter} placeholder="Type a company or position…"
+              onChange={event => setFilter(event.target.value)}/>
           </label>
           <label>Rejection reason <span className="optional">optional — you choose it, never guessed</span>
             <select value={reason} onChange={event => setReason(event.target.value)}>

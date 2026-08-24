@@ -10,7 +10,7 @@ export const REJECTION_REASONS = ['', 'Language requirement', 'Experience or ski
 export type CapturedEmail = { from: string; address: string; subject: string; sentAt: string; sentAtIso: string; text: string; blocks: JdBlock[] }
 export type SavedJob = { id: string; company: string; position: string; status: string; url: string }
 
-export type JdSpan = { text: string; href?: string }
+export type JdSpan = { text: string; href?: string; bold?: boolean }
 /** `spans` is only set when the block carries links; its concatenated text always equals `text`. */
 export type JdBlock = { type: 'heading_2' | 'heading_3' | 'paragraph' | 'bulleted_list_item' | 'numbered_list_item'; text: string; spans?: JdSpan[] }
 export type Job = { url: string; company: string; position: string; location: string; work_mode: string; source: string; employment_type: string; status: string; jd_text: string; jd_blocks: JdBlock[]; notes: string }

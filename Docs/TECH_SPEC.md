@@ -82,16 +82,16 @@ LinkedIn now ships hashed CSS class names, so the description is anchored on `[i
 The adapter clicks the More/See more control **inside the description container only**; a page-wide search hits the company feed instead. It walks the description DOM to derive `jd_blocks` in source order, and `jd_text` is the joined block text, so the two can never diverge.
 
 ```ts
-type JdSpan = { text: string; href?: string }
+type JdSpan = { text: string; href?: string; bold?: boolean }
 type JdBlock = {
   type: 'heading_2' | 'heading_3' | 'paragraph' |
         'bulleted_list_item' | 'numbered_list_item'
   text: string
-  spans?: JdSpan[]   // only when the block carries links
+  spans?: JdSpan[]   // only when the block carries links or bold
 }
 ```
 
-No layer may summarize, translate or rewrite the JD. Links become Notion `rich_text` entries with `link.url`; LinkedIn `/safety/go` redirects are unwrapped to the destination. A manually entered job with no structure is stored as plain paragraphs split on blank lines — no keyword-based section guessing.
+No layer may summarize, translate or rewrite the JD. Links become Notion `rich_text` entries with `link.url`, and `<strong>`/`<b>` becomes a bold annotation; a line that is entirely bold becomes a heading instead, so it is not bolded twice. LinkedIn `/safety/go` redirects are unwrapped to the destination. A manually entered job with no structure is stored as plain paragraphs split on blank lines — no keyword-based section guessing.
 
 ## Domain model
 
@@ -109,6 +109,8 @@ Application statuses, employment types and work modes are defined in `src/lib/do
 | Subject | `[id$="_SUBJECT"]` | `h2` |
 | Sender | text node `Name<address>` | `[email]` / `[jid]` / `[data-hovercard-id]` |
 | Date | `[id$="_DATETIME"]` | `[title]` holding a year |
+
+`matchJob` preselects the application: the sender's domain labels are compared against saved company names, then the subject, then the message text, with legal suffixes stripped and known mail-vendor labels skipped so `sara@innowave.teamtailor-mail.com` still resolves to InnoWave. The panel shows which signal matched and the user can change it; nothing is saved automatically. This is name matching against existing records, not inference about the message, so it does not conflict with ADR-011.
 
 The sender search skips the body subtree, so an address quoted in a signature cannot be mistaken for the sender. `toIsoDate` converts only year-first dates; anything else keeps its raw string in the entry while `Last Contact` falls back to the capture time.
 

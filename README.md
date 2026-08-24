@@ -11,7 +11,7 @@ There is no server. The extension calls the Notion API directly from your browse
 - Saves the description as native Notion blocks — headings stay headings, lists stay lists, links stay clickable.
 - Normalizes the messy URL into `linkedin.com/jobs/view/<id>` and refuses to create a second row for a job you already saved.
 - Tracks status, applied date and notes, and attaches the CV and application letter you actually sent.
-- Attaches correspondence: open a message in Gmail or Outlook on the web, pick which application it belongs to, and the sender, date and full text are appended to that job's Notion page as a timeline. Rejection reason is a dropdown you choose — never guessed from the text.
+- Attaches correspondence: open a message in Gmail or Outlook on the web and the sender, date and full text are appended to a job's Notion page as a timeline. The application is preselected by matching the sender's domain against your saved companies, with the reason shown so a wrong guess is obvious. Rejection reason is a dropdown you choose — never guessed from the text.
 
 Everything extracted is shown in the panel for review before anything is written.
 

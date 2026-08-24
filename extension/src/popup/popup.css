@@ -8,3 +8,4 @@ body{width:auto;min-width:360px;min-height:100vh}
 .mail-preview{font-size:12px;line-height:1.6;color:#5a655e;background:#fff;border:1px solid #e2e7e3;border-radius:9px;padding:11px;margin:10px 0 0}
 .optional{font-weight:400;color:#8a948d;font-size:11px}
 .message a{color:#276447}
+.match-reason{font-size:11px;color:#5a655e;margin:-4px 0 0;line-height:1.5}
