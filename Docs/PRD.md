@@ -20,8 +20,9 @@ The product must:
 6. Save JD headings, paragraphs and lists as native Notion blocks without rewriting text.
 7. Track application status, applied date and notes.
 8. Attach CV, Application Letter and Other Documents files.
-9. Avoid duplicates through canonical-URL lookup.
-10. Install and run without a server, so it can be distributed to other people.
+9. Attach rejection and other correspondence from Gmail or Outlook to the matching application, with a reason the user selects.
+10. Avoid duplicates through canonical-URL lookup.
+11. Install and run without a server, so it can be distributed to other people.
 
 ## Non-goals
 
@@ -31,6 +32,10 @@ The product must:
 - AI rewriting, summarization, scoring or translation of JDs.
 - Generating resumes or application letters.
 - Replacing Notion with a separate dashboard.
+
+## Mail boundary
+
+Allowed behavior is limited to the single message open in the reading pane of a supported webmail host, read on demand while the panel is open. JobVault must not enumerate the message list, search the mailbox, open other messages, send mail or change account settings. The rejection reason is selected by the user; no layer classifies the message.
 
 ## LinkedIn boundary
 
@@ -107,6 +112,9 @@ JobVault automatically creates **Job Applications** under the configured parent 
 12. Other Documents
 13. Canonical URL
 14. Saved Date
+15. Rejection Reason
+16. Contact Email
+17. Last Contact
 
 There is no Source or Match Score property. Motivation-letter and cover-letter uploads both use Application Letter. Location holds the place only; Remote, Hybrid and On-site live in the Work Mode select so the board can filter on them.
 
@@ -136,3 +144,4 @@ There is no Source or Match Score property. Motivation-letter and cover-letter u
 - [x] Notion database is created automatically.
 - [x] Extension behavior has automated tests.
 - [x] Runs with no server, using the user's own Notion token.
+- [x] Rejection and other emails can be attached to an application from Gmail and Outlook.

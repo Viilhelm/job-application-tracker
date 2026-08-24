@@ -6,9 +6,30 @@
   "scripts": {
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "vitest"
+    "test": "vitest",
+    "typecheck": "tsc -p tsconfig.check.json"
   },
-  "dependencies": {"@vitejs/plugin-react": "latest", "vite": "latest", "react": "latest", "react-dom": "latest"},
-  "devDependencies": {"@eslint/js": "latest", "@testing-library/react": "latest", "@types/chrome": "latest", "@types/react": "latest", "@types/react-dom": "latest", "eslint": "latest", "eslint-plugin-react-hooks": "latest", "eslint-plugin-react-refresh": "latest", "globals": "latest", "jsdom": "latest", "typescript": "latest", "typescript-eslint": "latest", "vitest": "latest"}
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "@testing-library/react": "latest",
+    "@types/chrome": "latest",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-plugin-react-hooks": "latest",
+    "eslint-plugin-react-refresh": "latest",
+    "globals": "latest",
+    "jsdom": "latest",
+    "typescript": "latest",
+    "typescript-eslint": "latest",
+    "vitest": "latest"
+  }
 }
-

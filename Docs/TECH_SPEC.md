@@ -12,6 +12,8 @@ Chrome/Edge side panel (React + TypeScript)
 Job Applications database + job page blocks + uploaded files
 ```
 
+Gmail and Outlook tabs carry a second content script feeding the same panel, which appends the open message to a job page the user picks.
+
 There is no server. Extension pages carry `host_permissions` for `https://api.notion.com/*`, which exempts their requests from CORS; content scripts cannot do this, so every Notion call happens in the panel, never in the LinkedIn page.
 
 ## Stack
@@ -26,12 +28,16 @@ There is no server. Extension pages carry `host_permissions` for `https://api.no
   "permissions": ["activeTab", "storage", "sidePanel", "scripting"],
   "host_permissions": [
     "https://api.notion.com/*",
-    "https://www.linkedin.com/*"
+    "https://www.linkedin.com/*",
+    "https://mail.google.com/*",
+    "https://outlook.live.com/*",
+    "https://outlook.office.com/*",
+    "https://outlook.office365.com/*"
   ]
 }
 ```
 
-The content script match is restricted to `https://www.linkedin.com/jobs/*`. The extension requests no `<all_urls>` permission.
+Content scripts match `https://www.linkedin.com/jobs/*` and the four webmail hosts. The extension requests no `<all_urls>` permission. Removing the mail hosts and the second `content_scripts` entry disables email capture and leaves everything else working.
 
 ## Side-panel lifecycle
 
@@ -89,9 +95,24 @@ No layer may summarize, translate or rewrite the JD. Links become Notion `rich_t
 
 Application statuses, employment types and work modes are defined in `src/lib/domain.ts`, which is the single source of truth now that no server mirrors them. An unset optional field is an empty string and is simply omitted from the Notion payload.
 
+## Mail capture
+
+`detectMailClient(host)` gates the panel into email mode. Extraction is scoped to the reading pane — `#ReadingPaneContainerId` / `[role="main"]` on Outlook, `[role="main"]` on Gmail — because the message list carries a sender for every conversation in the mailbox.
+
+| | Outlook web | Gmail |
+|---|---|---|
+| Body | `[id^="UniqueMessageBody"]`, `[role="document"]` | `.a3s`, `[data-message-id] [dir="ltr"]` |
+| Subject | `[id$="_SUBJECT"]` | `h2` |
+| Sender | text node `Name<address>` | `[email]` / `[jid]` / `[data-hovercard-id]` |
+| Date | `[id$="_DATETIME"]` | `[title]` holding a year |
+
+The sender search skips the body subtree, so an address quoted in a signature cannot be mistaken for the sender. `toIsoDate` converts only year-first dates; anything else keeps its raw string in the entry while `Last Contact` falls back to the capture time.
+
+The Outlook and Gmail fixtures are reconstructions of captured structure with the content replaced, because a raw capture carries real names, addresses and message text into a public repository. Ids, roles and nesting match what was observed; only the words differ. The LinkedIn fixtures are raw captures of public job postings.
+
 ## Notion operations
 
-`src/lib/notion.ts` exposes `lookupJob`, `createJob`, `updateJob`, `uploadDocument` and `migrateWorkMode`; `src/lib/notion-client.ts` holds the token, the request wrapper and error shaping.
+`src/lib/notion.ts` exposes `lookupJob`, `createJob`, `updateJob`, `uploadDocument`, `listJobs`, `appendEmail` and `migrateWorkMode`; `src/lib/notion-client.ts` holds the token, the request wrapper and error shaping.
 
 Duplicate creation is prevented by a data-source query on Canonical URL. Existing jobs are returned rather than overwritten; replacing an existing JD requires a future explicit action.
 
@@ -142,4 +163,4 @@ Text longer than the Notion rich-text limit is chunked without discarding conten
 
 ## Verification
 
-Commands live in the README. Extraction changes additionally require a captured-DOM fixture: jsdom does not implement `innerText`, so any code path that reads it is untestable and any test that fakes it proves nothing about the browser.
+Commands live in the README. `npm run typecheck` covers test files, which the build config excludes; without it a test fixture can drift from the type it claims to satisfy and still pass. Extraction changes additionally require a captured-DOM fixture: jsdom does not implement `innerText`, so any code path that reads it is untestable and any test that fakes it proves nothing about the browser.

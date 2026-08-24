@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Job } from './domain'
 import { extractNotionId } from './notion-client'
-import { jdChildren, splitWorkMode, type NotionBlock, type NotionRichText } from './notion'
+import { emailChildren, jdChildren, splitWorkMode, type NotionBlock, type NotionRichText } from './notion'
 
 const typeOf = (block: NotionBlock) => block.type
 const bodyOf = (block: NotionBlock) => (block as Record<string, { rich_text: NotionRichText[] }>)[block.type].rich_text
@@ -46,6 +46,41 @@ describe('JD page body', () => {
     const chunks = bodyOf(blocks[2])
     expect(chunks).toHaveLength(3)
     expect(chunks.map(chunk => chunk.text.content).join('')).toBe(long)
+  })
+})
+
+describe('Email timeline entry', () => {
+  const email = {
+    from: 'Ariane van der Haegen', address: 'ariane@kartesia.com',
+    subject: 'Your application', sentAt: '2026-08-16T09:12:00Z',
+    text: '', sentAtIso: '2026-08-16T09:12:00.000Z', blocks: [
+      { type: 'paragraph' as const, text: 'Thank you for applying.' },
+      { type: 'paragraph' as const, text: 'We are looking for a Dutch speaker.' },
+    ],
+  }
+
+  it('leads with the subject and records who sent it and when', () => {
+    const blocks = emailChildren(email)
+    expect(blocks.map(typeOf)).toEqual(['heading_2', 'paragraph', 'paragraph', 'paragraph'])
+    expect(bodyOf(blocks[0])[0].text.content).toBe('Your application')
+    expect(bodyOf(blocks[1])[0].text.content)
+      .toBe('From: Ariane van der Haegen <ariane@kartesia.com>\nReceived: 2026-08-16T09:12:00Z')
+  })
+
+  it('keeps the body verbatim, in order', () => {
+    expect(emailChildren(email).slice(2).map(block => bodyOf(block)[0].text.content))
+      .toEqual(['Thank you for applying.', 'We are looking for a Dutch speaker.'])
+  })
+
+  it('falls back to plain text when a client exposes no structure', () => {
+    const blocks = emailChildren({ ...email, blocks: [], text: 'First line.\n\nSecond line.' })
+    expect(blocks.slice(2).map(block => bodyOf(block)[0].text.content)).toEqual(['First line.', 'Second line.'])
+  })
+
+  it('still writes an entry when the sender could not be read', () => {
+    const blocks = emailChildren({ ...email, from: '', address: '', sentAt: '', subject: '' })
+    expect(blocks.map(typeOf)).toEqual(['heading_2', 'paragraph', 'paragraph'])
+    expect(bodyOf(blocks[0])[0].text.content).toBe('(no subject)')
   })
 })
 

@@ -3,6 +3,13 @@ export const SOURCES = ['LinkedIn', 'Company Site', 'Greenhouse', 'Lever', 'Work
 export const EMPLOYMENT_TYPES = ['', 'Full-time', 'Internship', 'Contract', 'Other'] as const
 export const WORK_MODES = ['', 'Remote', 'Hybrid', 'On-site'] as const
 
+/** Chosen by the user, never inferred from the email: the reason is the point of the retrospective. */
+export const REJECTION_REASONS = ['', 'Language requirement', 'Experience or skills', 'Education or visa', 'Role cancelled', 'Not specified', 'Other'] as const
+
+/** One captured message. `blocks` reuses JdBlock because Notion renders both the same way. */
+export type CapturedEmail = { from: string; address: string; subject: string; sentAt: string; sentAtIso: string; text: string; blocks: JdBlock[] }
+export type SavedJob = { id: string; company: string; position: string; status: string; url: string }
+
 export type JdSpan = { text: string; href?: string }
 /** `spans` is only set when the block carries links; its concatenated text always equals `text`. */
 export type JdBlock = { type: 'heading_2' | 'heading_3' | 'paragraph' | 'bulleted_list_item' | 'numbered_list_item'; text: string; spans?: JdSpan[] }

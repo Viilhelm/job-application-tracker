@@ -25,6 +25,7 @@ JobVault creates the Job Applications database under the configured parent page 
 ## ADR-006 — One application-letter property
 
 Motivation letters and cover letters share the `Application Letter` file property. `application_letter` is the request value the popup sends; the legacy values `motivation_letter` and `cover_letter` remain accepted and map to the same property. The popup offers a single upload slot, because an upload replaces the property's file list and two slots silently overwrote each other.
+
 ## ADR-007 — Anchor extraction on component ids, not class names
 
 LinkedIn ships build-hashed CSS class names (`_4bbf76d5`), so class selectors break on every deploy. The description is anchored on `[id^="JobDetails_AboutTheJob_"]`; the panel header, which has no id, is found by shape — the sibling preceding the description that carries a work-mode or employment pill. Legacy class selectors are kept only as a fallback for older markup.
@@ -49,3 +50,14 @@ ADR-001 kept the token server-side, which was right while the backend was a priv
 
 This is a deliberate trade. Notion OAuth would avoid handing users a raw secret, but its token exchange needs a `client_secret` and Notion has no PKCE public-client flow, so OAuth cannot exist without a server. Between "user pastes their own token" and "we custody everyone's credentials", the first is both less work and less exposure. The cost is onboarding friction — creating an integration is a real step that will lose non-technical users. If that drop-off ever matters more than the operational burden, the answer is a minimal server that does the OAuth exchange only and never sees JD content.
 
+## ADR-011 — Email capture reads the reading pane, and the reason is never inferred
+
+Correspondence is attached to a job from Gmail and Outlook on the web. Two constraints shape it.
+
+Everything is read from the reading pane, never from the document. The message list holds a sender for every conversation in the mailbox, so a page-wide lookup would file a stranger's address under the job — the same defect the LinkedIn search page produced by matching a stale job panel.
+
+The rejection reason is a select the user picks, and the message is stored verbatim. Classifying "they wanted a Dutch speaker" as a skills gap rather than a hard requirement would quietly corrupt the one thing the retrospective exists to answer, and inference over captured content is excluded by ADR-004.
+
+A date is converted only when it is year-first and therefore unambiguous. `8/9/2026` is August or September depending on locale, and a silently wrong date is worse in a timeline than no date; otherwise the raw string is kept in the entry and the capture time stamps the property.
+
+The cost is real: the extension now holds host permissions for two mail providers, which Chrome presents as the ability to read all mail on those domains. It reads one open message, on demand, and never enumerates a mailbox.

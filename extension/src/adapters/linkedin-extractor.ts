@@ -1,4 +1,5 @@
-import type { JdBlock, JdSpan } from '../lib/domain'
+import type { JdBlock } from '../lib/domain'
+import { blocksToText, clean, domBlocks } from '../lib/blocks'
 
 export type ExtractedJob = { company: string; position: string; location: string; work_mode: string; employment_type: string; jd_text: string; jd_blocks: JdBlock[] }
 
@@ -10,16 +11,11 @@ function text(root: ParentNode, selectors: string[]): string {
   return ''
 }
 
-function clean(value: string | null | undefined): string {
-  return value?.replace(/\s+/g, ' ').trim() || ''
-}
-
 function meta(root: ParentNode, selector: string): string {
   return clean(root.querySelector<HTMLMetaElement>(selector)?.content)
 }
 
 const ABOUT_THE_JOB = /^(about the job|关于职位|關於職位)$/i
-const SEE_MORE = /(?:…|\.\.\.)?\s*(更多|顯示更多|显示更多|see more|show more)\s*$/i
 
 /** LinkedIn ships hashed CSS class names, so the job panel is keyed by its stable component id. */
 export const JOB_DESCRIPTION_SELECTOR = '[id^="JobDetails_AboutTheJob_"], [componentkey^="JobDetails_AboutTheJob_"]'
@@ -129,109 +125,6 @@ function readTopCard(element: Element | null): TopCard {
   }
 }
 
-const SKIP_TAGS = new Set(['script', 'style', 'button', 'svg', 'img', 'noscript', 'template', 'input', 'select', 'textarea'])
-const BLOCK_TAGS = new Set(['address', 'article', 'aside', 'blockquote', 'dd', 'div', 'dl', 'dt', 'figure', 'footer', 'form', 'header', 'hr', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tr', 'ul'])
-
-/** Text gathered for the line being built, split by how much of it came from <strong>/<b>. */
-type Cursor = { blocks: JdBlock[]; parts: JdSpan[]; strong: number; plain: number; list: JdBlock['type'] | null }
-
-/** Collapses whitespace across part boundaries so the joined spans stay identical to the block text. */
-function collapseParts(parts: JdSpan[]): { text: string; spans: JdSpan[] } {
-  let text = ''
-  const spans: JdSpan[] = []
-  for (const part of parts) {
-    let value = part.text.replace(/\s+/g, ' ')
-    if (!text || text.endsWith(' ')) value = value.replace(/^ /, '')
-    if (!value) continue
-    text += value
-    const previous = spans.at(-1)
-    if (previous && previous.href === part.href) previous.text += value
-    else spans.push({ text: value, href: part.href })
-  }
-  return { text, spans }
-}
-
-function truncateSpans(spans: JdSpan[], length: number): JdSpan[] {
-  const kept: JdSpan[] = []
-  let used = 0
-  for (const span of spans) {
-    if (used >= length) break
-    const text = span.text.slice(0, length - used)
-    used += text.length
-    kept.push({ text, href: span.href })
-  }
-  return kept
-}
-
-function flush(cursor: Cursor, forced?: JdBlock['type']): void {
-  const collapsed = collapseParts(cursor.parts)
-  const text = collapsed.text.replace(SEE_MORE, '').trim()
-  const emphasised = cursor.strong > 0 && cursor.plain === 0
-  cursor.parts = []
-  cursor.strong = 0
-  cursor.plain = 0
-  if (!text) return
-  const type = forced || cursor.list || (emphasised && text.length <= 120 ? 'heading_2' : 'paragraph')
-  const spans = truncateSpans(collapsed.spans, text.length)
-  cursor.blocks.push(spans.some(span => span.href) ? { type, text, spans } : { type, text })
-}
-
-/** LinkedIn wraps outbound links in a tracked /safety/go redirect; store the destination instead. */
-function resolveHref(value: string | null): string | undefined {
-  if (!value) return undefined
-  try {
-    const url = new URL(value, 'https://www.linkedin.com')
-    if (url.pathname.startsWith('/safety/go')) return url.searchParams.get('url') || url.href
-    return url.href
-  } catch { return undefined }
-}
-
-function walkDescription(node: Node, cursor: Cursor, strongDepth: number, href?: string): void {
-  if (node.nodeType === Node.TEXT_NODE) {
-    const value = node.textContent || ''
-    cursor.parts.push({ text: value, href })
-    if (strongDepth > 0) cursor.strong += clean(value).length
-    else cursor.plain += clean(value).length
-    return
-  }
-  if (!(node instanceof Element)) return
-  const tag = node.tagName.toLowerCase()
-  if (SKIP_TAGS.has(tag)) return
-  const depth = strongDepth + (tag === 'strong' || tag === 'b' ? 1 : 0)
-  const link = tag === 'a' ? resolveHref(node.getAttribute('href')) || href : href
-  const children = () => { for (const child of node.childNodes) walkDescription(child, cursor, depth, link) }
-  if (tag === 'br') { flush(cursor); return }
-  if (/^h[1-6]$/.test(tag)) {
-    if (ABOUT_THE_JOB.test(clean(node.textContent))) return
-    flush(cursor)
-    children()
-    flush(cursor, tag === 'h1' || tag === 'h2' ? 'heading_2' : 'heading_3')
-    return
-  }
-  if (tag === 'li') {
-    flush(cursor)
-    const enclosing = cursor.list
-    cursor.list = node.closest('ol') ? 'numbered_list_item' : 'bulleted_list_item'
-    children()
-    flush(cursor)
-    cursor.list = enclosing
-    return
-  }
-  if (BLOCK_TAGS.has(tag)) { flush(cursor); children(); flush(cursor); return }
-  children()
-}
-
-function descriptionBlocks(element: Element): JdBlock[] {
-  const cursor: Cursor = { blocks: [], parts: [], strong: 0, plain: 0, list: null }
-  walkDescription(element, cursor, 0)
-  flush(cursor)
-  return cursor.blocks
-}
-
-function blocksToText(blocks: JdBlock[]): string {
-  return blocks.map(block => block.text).join('\n\n')
-}
-
 function titleMetadata(root: ParentNode): { position: string; company: string } {
   const ogTitle = meta(root, 'meta[property="og:title"]')
   const pageTitle = clean(root.querySelector('title')?.textContent)
@@ -259,7 +152,7 @@ function fromJsonLd(root: ParentNode): Partial<ExtractedJob> {
       const address = job.jobLocation?.address || job.jobLocation?.[0]?.address || {}
       const holder = document.createElement('div')
       holder.innerHTML = job.description || ''
-      const blocks = job.description ? descriptionBlocks(holder) : []
+      const blocks = job.description ? domBlocks(holder) : []
       return { position: job.title || '', company: job.hiringOrganization?.name || '', location: [address.addressLocality, address.addressRegion, address.addressCountry].filter(Boolean).join(', '), employment_type: normalizeEmployment(job.employmentType), jd_text: blocksToText(blocks), jd_blocks: blocks }
     } catch { /* Ignore malformed structured data. */ }
   }
@@ -288,7 +181,7 @@ export function extractLinkedInJob(root: ParentNode = document, jobId = ''): Ext
   const ogDescription = meta(pageRoot, 'meta[property="og:description"]') || meta(pageRoot, 'meta[name="description"]')
   const descriptionElement = descriptionFor(pageRoot, jobId) || root.querySelector(LEGACY_DESCRIPTION_SELECTOR) || aboutTheJobContainer(root)
   const card = readTopCard(topCardElement(pageRoot, descriptionElement))
-  const extractedBlocks = descriptionElement ? descriptionBlocks(descriptionElement) : structured.jd_blocks || []
+  const extractedBlocks = descriptionElement ? domBlocks(descriptionElement, ABOUT_THE_JOB) : structured.jd_blocks || []
   const fallbackText = extractedBlocks.length ? '' : ogDescription
   const jdBlocks = extractedBlocks.length ? extractedBlocks : fallbackText ? [{ type: 'paragraph' as const, text: fallbackText }] : []
   return {

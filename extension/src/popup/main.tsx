@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { canonicalJobUrl, detectSource, EMPLOYMENT_TYPES, rebuildJdBlocks, SOURCES, STATUSES, WORK_MODES, type Job, type JobResponse } from '../lib/domain'
+import { canonicalJobUrl, detectSource, EMPLOYMENT_TYPES, rebuildJdBlocks, SOURCES, STATUSES, WORK_MODES, type CapturedEmail, type Job, type JobResponse } from '../lib/domain'
+import { detectMailClient } from '../adapters/mail-extractor'
+import { MailCapture } from './MailCapture'
 import { createJob, lookupJob, updateJob, uploadDocument } from '../lib/notion'
 import './popup.css'
 
@@ -13,6 +15,8 @@ function Popup() {
   const [message, setMessage] = useState('')
   const [uploading, setUploading] = useState('')
   const [uploadNote, setUploadNote] = useState<{ text: string; failed: boolean } | null>(null)
+  const [email, setEmail] = useState<CapturedEmail | null>(null)
+  const [onMailPage, setOnMailPage] = useState(false)
   const [editingJd, setEditingJd] = useState(false)
   const jdRef = useRef<HTMLTextAreaElement>(null)
   const initialized = useRef(false)
@@ -34,6 +38,27 @@ function Popup() {
       if (!initialized.current) setState('loading')
       setMessage('')
       setSaved(null)
+      const client = rawUrl ? detectMailClient(new URL(rawUrl).hostname) : ''
+      if (client && tab?.id) {
+        let captured: CapturedEmail | null = null
+        try {
+          captured = await chrome.tabs.sendMessage(tab.id, { type: 'JOBVAULT_EXTRACT_EMAIL_V1' })
+        } catch {
+          try {
+            await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['mail-adapter.js'] })
+            captured = await chrome.tabs.sendMessage(tab.id, { type: 'JOBVAULT_EXTRACT_EMAIL_V1' })
+          } catch { /* Fall through to the normal panel if the mail tab blocks access. */ }
+        }
+        if (sequence !== loadSequence.current) return
+        setEmail(captured)
+        setOnMailPage(true)
+        setState('ready')
+        initialized.current = true
+        return
+      }
+      setEmail(null)
+      setOnMailPage(false)
+
       let extracted: Partial<Job> = {}
       if (source === 'LinkedIn' && tab?.id) {
         try {
@@ -84,6 +109,17 @@ function Popup() {
     try { setUploadNote({ text: `${await uploadDocument(saved.notion_page_id, kind, file)} uploaded`, failed: false }) }
     catch (error) { setUploadNote({ text: error instanceof Error ? error.message : 'Upload failed', failed: true }) }
     finally { setUploading('') }
+  }
+
+  if (onMailPage) {
+    if (email) return <MailCapture email={email}/>
+    return <main>
+      <header><div className="mark">JV</div><div><h1>JobVault</h1><p>Attach an email to an application</p></div></header>
+      <div className="jd-captured empty">
+        <span>⚠ No open email found</span>
+        <small>Open a message in the reading pane, then reopen this panel.</small>
+      </div>
+    </main>
   }
 
   return <main>

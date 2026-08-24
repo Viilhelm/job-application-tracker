@@ -1,4 +1,4 @@
-import { canonicalizeUrl, type JdBlock, type Job, type JobResponse, type JdSpan } from './domain'
+import { canonicalizeUrl, REJECTION_REASONS, type CapturedEmail, type JdBlock, type Job, type JobResponse, type JdSpan, type SavedJob } from './domain'
 import { NotionError, notionRequest, readSettings, writeSettings } from './notion-client'
 
 /** Order used when the database is first created; Notion view order is the user's afterwards. */
@@ -17,6 +17,9 @@ const DATABASE_PROPERTIES: Record<string, unknown> = {
   'Other Documents': { files: {} },
   'Canonical URL': { rich_text: {} },
   'Saved Date': { date: {} },
+  'Rejection Reason': { select: { options: REJECTION_REASONS.filter(Boolean).map(name => ({ name })) } },
+  'Contact Email': { email: {} },
+  'Last Contact': { date: {} },
 }
 
 const WORK_MODE_MARKERS: Record<string, string> = {
@@ -119,6 +122,68 @@ async function dataSource(): Promise<{ token: string; id: string }> {
   return { token: settings.token, id }
 }
 
+/** A database created before a property existed has to gain it before anything writes to it. */
+async function ensureProperties(token: string, id: string, names: string[]): Promise<void> {
+  const source = await notionRequest<{ properties: Record<string, unknown> }>(token, 'GET', `/data_sources/${id}`)
+  const missing = names.filter(name => !(name in source.properties))
+  if (!missing.length) return
+  await notionRequest(token, 'PATCH', `/data_sources/${id}`, {
+    properties: Object.fromEntries(missing.map(name => [name, DATABASE_PROPERTIES[name]])),
+  })
+}
+
+export function emailChildren(email: CapturedEmail): NotionBlock[] {
+  const sender = email.address ? `${email.from} <${email.address}>` : email.from
+  const received = [sender && `From: ${sender}`, email.sentAt && `Received: ${email.sentAt}`].filter(Boolean).join('\n')
+  const blocks: NotionBlock[] = [
+    { object: 'block', type: 'heading_2', heading_2: { rich_text: richText([{ text: email.subject || '(no subject)' }]) } },
+  ]
+  if (received) blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: richText([{ text: received }]) } })
+  const body: JdBlock[] = email.blocks.length
+    ? email.blocks
+    : email.text.split(/\n\s*\n/).map(text => text.trim()).filter(Boolean).map(text => ({ type: 'paragraph', text }))
+  for (const block of body) {
+    const spans = block.spans?.length ? block.spans : [{ text: block.text.trim() }]
+    blocks.push({ object: 'block', type: block.type, [block.type]: { rich_text: richText(spans) } })
+  }
+  return blocks
+}
+
+/** The picker needs enough to recognize a job; the full row is never loaded. */
+export async function listJobs(): Promise<SavedJob[]> {
+  const { token, id } = await dataSource()
+  const found = await notionRequest<QueryResult>(token, 'POST', `/data_sources/${id}/query`, {
+    sorts: [{ property: 'Saved Date', direction: 'descending' }],
+    page_size: 100,
+  })
+  return found.results.map(page => ({
+    id: page.id,
+    url: page.url,
+    company: plain(page, 'Company'),
+    position: plain(page, 'Position'),
+    status: page.properties?.Status?.select?.name || '',
+  }))
+}
+
+export async function appendEmail(pageId: string, email: CapturedEmail, rejectionReason = ''): Promise<void> {
+  const { token, id } = await dataSource()
+  await ensureProperties(token, id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
+
+  const children = emailChildren(email)
+  for (let index = 0; index < children.length; index += 100) {
+    await notionRequest(token, 'PATCH', `/blocks/${pageId}/children`, { children: children.slice(index, index + 100) })
+  }
+
+  const properties: Record<string, unknown> = {}
+  if (email.address) properties['Contact Email'] = { email: email.address }
+  // Only a date parsed unambiguously is trusted; otherwise the capture time is the honest stamp.
+  properties['Last Contact'] = { date: { start: email.sentAtIso || new Date().toISOString() } }
+  if (rejectionReason && REJECTION_REASONS.includes(rejectionReason as typeof REJECTION_REASONS[number])) {
+    properties['Rejection Reason'] = { select: { name: rejectionReason } }
+  }
+  if (Object.keys(properties).length) await notionRequest(token, 'PATCH', `/pages/${pageId}`, { properties })
+}
+
 export async function lookupJob(url: string): Promise<JobResponse | null> {
   const canonical = canonicalizeUrl(url)
   const { token, id } = await dataSource()
@@ -205,10 +270,7 @@ export function splitWorkMode(location: string): { location: string; mode: strin
 /** One-time split of the legacy combined Location text; rows without a known mode are left alone. */
 export async function migrateWorkMode(): Promise<number> {
   const { token, id } = await dataSource()
-  const source = await notionRequest<{ properties: Record<string, unknown> }>(token, 'GET', `/data_sources/${id}`)
-  if (!('Work Mode' in source.properties)) {
-    await notionRequest(token, 'PATCH', `/data_sources/${id}`, { properties: { 'Work Mode': DATABASE_PROPERTIES['Work Mode'] } })
-  }
+  await ensureProperties(token, id, ['Work Mode'])
   let cursor: string | undefined
   let migrated = 0
   do {

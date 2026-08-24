@@ -11,12 +11,15 @@ There is no server. The extension calls the Notion API directly from your browse
 - Saves the description as native Notion blocks — headings stay headings, lists stay lists, links stay clickable.
 - Normalizes the messy URL into `linkedin.com/jobs/view/<id>` and refuses to create a second row for a job you already saved.
 - Tracks status, applied date and notes, and attaches the CV and application letter you actually sent.
+- Attaches correspondence: open a message in Gmail or Outlook on the web, pick which application it belongs to, and the sender, date and full text are appended to that job's Notion page as a timeline. Rejection reason is a dropdown you choose — never guessed from the text.
 
 Everything extracted is shown in the panel for review before anything is written.
 
 ### What it does not do
 
 It does not apply to jobs, fill forms, message anyone, crawl result lists, or automate your account. It reads the one job you are looking at, when you open the panel. It never rewrites, summarizes or translates a description.
+
+Email capture is the same shape: it reads the single message open in the reading pane, only while the panel is open, and never enumerates a mailbox. Chrome will nonetheless warn that the extension can read all data on `mail.google.com` and `outlook.*` — that is the permission Chrome grants for a content script on those hosts, and it is the honest cost of the feature. If you do not want it, delete the second entry from `content_scripts` and the mail hosts from `host_permissions` in `extension/public/manifest.json` and rebuild; everything else keeps working.
 
 ## Install
 
@@ -62,6 +65,7 @@ Design decisions and their reasoning live in [Docs/decisions.md](Docs/decisions.
 ```powershell
 cd extension
 npm run lint
+npm run typecheck
 npm test -- --run
 npm run build
 ```
@@ -72,7 +76,7 @@ Changes to extraction need a captured-DOM fixture. jsdom does not implement `inn
 
 ```text
 extension/   the whole application
-  src/adapters/    LinkedIn extraction + DOM fixtures
+  src/adapters/    LinkedIn and webmail extraction + DOM fixtures
   src/lib/         Notion client, domain types
   src/popup/       side panel
   src/options/     settings page

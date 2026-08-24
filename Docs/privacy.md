@@ -6,6 +6,12 @@ The token is stored in `chrome.storage.local`. That is device-local and does not
 
 The project contains no analytics, advertising or sale/sharing of job-search data.
 
+## Mail access
+
+The content script runs on `mail.google.com`, `outlook.live.com`, `outlook.office.com` and `outlook.office365.com`. When JobVault is open on one of those tabs it reads the single message shown in the reading pane: sender name and address, subject, date and body. It does not read the message list, search the mailbox, open other messages, send mail or change any setting.
+
+Captured messages are written only to the job page you pick, in your own Notion workspace. Chrome describes this permission as reading all your data on those sites, because that is the granularity Chrome offers; the narrower behaviour above is enforced by the code, not by the permission.
+
 ## LinkedIn access
 
 The extension content script is restricted to `https://www.linkedin.com/jobs/*`. When JobVault is open, it may read:
