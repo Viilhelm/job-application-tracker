@@ -148,10 +148,12 @@ export function messageChildren(email: CapturedEmail): NotionBlock[] {
   }))
 }
 
+/** Identity, so reopening the panel on a message already filed cannot create a second record. */
+const MESSAGE_ID: Record<string, unknown> = { 'Message ID': { rich_text: {} } }
+
 const CORRESPONDENCE_PROPERTIES = (jobsDataSourceId: string): Record<string, unknown> => ({
   'Subject': { title: {} },
-  // Identity, so reopening the panel on a message already filed cannot create a second record.
-  'Message ID': { rich_text: {} },
+  ...MESSAGE_ID,
   'From': { rich_text: {} },
   'From Email': { email: {} },
   'Received': { date: {} },
@@ -202,10 +204,18 @@ async function correspondenceSource(): Promise<{ token: string; id: string }> {
 export async function findMessage(email: CapturedEmail): Promise<string | null> {
   if (!email.messageId) return null
   const mail = await correspondenceSource()
-  const found = await notionRequest<QueryResult>(mail.token, 'POST', `/data_sources/${mail.id}/query`, {
+  const query = () => notionRequest<QueryResult>(mail.token, 'POST', `/data_sources/${mail.id}/query`, {
     filter: { property: 'Message ID', rich_text: { equals: email.messageId } },
     page_size: 1,
   })
+  let found: QueryResult
+  try {
+    found = await query()
+  } catch {
+    // A database created before this property existed cannot be filtered on it; add it and retry once.
+    await ensureProperties(mail.token, mail.id, ['Message ID'], MESSAGE_ID)
+    found = await query()
+  }
   return found.results.length ? found.results[0].url : null
 }
 
@@ -215,7 +225,7 @@ export async function saveEmail(jobPageId: string, email: CapturedEmail, rejecti
   const jobs = await dataSource()
   await ensureProperties(jobs.token, jobs.id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
   const mail = await correspondenceSource()
-  await ensureProperties(mail.token, mail.id, ['Message ID'], CORRESPONDENCE_PROPERTIES(jobs.id))
+  await ensureProperties(mail.token, mail.id, ['Message ID'], MESSAGE_ID)
 
   const received = email.sentAtIso || new Date().toISOString()
   const properties: Record<string, unknown> = {
