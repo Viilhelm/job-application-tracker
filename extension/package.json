@@ -4,10 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:content && node scripts/check-content-scripts.mjs",
     "lint": "eslint .",
     "test": "vitest",
-    "typecheck": "tsc -p tsconfig.check.json"
+    "typecheck": "tsc -p tsconfig.check.json",
+    "build:content": "vite build --config vite.content.config.ts --mode linkedin-adapter && vite build --config vite.content.config.ts --mode mail-adapter"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

@@ -39,6 +39,10 @@ There is no server. Extension pages carry `host_permissions` for `https://api.no
 
 Content scripts match `https://www.linkedin.com/jobs/*` and the four webmail hosts. The extension requests no `<all_urls>` permission. Removing the mail hosts and the second `content_scripts` entry disables email capture and leaves everything else working.
 
+## Build
+
+Panel, options page and service worker are built as ES modules. Content scripts are built one at a time as self-contained IIFE bundles by `vite.content.config.ts`, because a Manifest V3 content script cannot be an ES module — and one shared source file is enough for the bundler to hoist a chunk and emit an `import`, after which the script never runs and nothing reports it. `scripts/check-content-scripts.mjs` reads every file named in `content_scripts` after each build and fails on an `import` or `export`.
+
 ## Side-panel lifecycle
 
 - The toolbar action opens `popup.html` through the Side Panel API.

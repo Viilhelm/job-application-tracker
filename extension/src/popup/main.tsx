@@ -16,7 +16,7 @@ function Popup() {
   const [uploading, setUploading] = useState('')
   const [uploadNote, setUploadNote] = useState<{ text: string; failed: boolean } | null>(null)
   const [email, setEmail] = useState<CapturedEmail | null>(null)
-  const [onMailPage, setOnMailPage] = useState(false)
+  const [mailPage, setMailPage] = useState<'' | 'empty' | 'unreachable'>('')
   const [editingJd, setEditingJd] = useState(false)
   const jdRef = useRef<HTMLTextAreaElement>(null)
   const initialized = useRef(false)
@@ -41,23 +41,25 @@ function Popup() {
       const client = rawUrl ? detectMailClient(new URL(rawUrl).hostname) : ''
       if (client && tab?.id) {
         let captured: CapturedEmail | null = null
+        // A tab opened before the extension was reloaded has no content script until it is injected.
+        let reachable = true
         try {
           captured = await chrome.tabs.sendMessage(tab.id, { type: 'JOBVAULT_EXTRACT_EMAIL_V1' })
         } catch {
           try {
             await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['mail-adapter.js'] })
             captured = await chrome.tabs.sendMessage(tab.id, { type: 'JOBVAULT_EXTRACT_EMAIL_V1' })
-          } catch { /* Fall through to the normal panel if the mail tab blocks access. */ }
+          } catch { reachable = false }
         }
         if (sequence !== loadSequence.current) return
         setEmail(captured)
-        setOnMailPage(true)
+        setMailPage(reachable ? 'empty' : 'unreachable')
         setState('ready')
         initialized.current = true
         return
       }
       setEmail(null)
-      setOnMailPage(false)
+      setMailPage('')
 
       let extracted: Partial<Job> = {}
       if (source === 'LinkedIn' && tab?.id) {
@@ -111,13 +113,14 @@ function Popup() {
     finally { setUploading('') }
   }
 
-  if (onMailPage) {
+  if (mailPage) {
     if (email) return <MailCapture email={email}/>
     return <main>
       <header><div className="mark">JV</div><div><h1>JobVault</h1><p>Attach an email to an application</p></div></header>
       <div className="jd-captured empty">
-        <span>⚠ No open email found</span>
-        <small>Open a message in the reading pane, then reopen this panel.</small>
+        {mailPage === 'unreachable'
+          ? <><span>⚠ JobVault cannot read this tab</span><small>Refresh the mail tab once. A tab opened before the extension was loaded has no content script yet.</small></>
+          : <><span>⚠ No open email found</span><small>Open a message in the reading pane, then reopen this panel.</small></>}
       </div>
     </main>
   }
