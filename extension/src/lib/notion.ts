@@ -132,12 +132,19 @@ async function ensureProperties(token: string, id: string, names: string[]): Pro
   })
 }
 
-export function emailChildren(email: CapturedEmail): NotionBlock[] {
+export const CORRESPONDENCE = 'Correspondence'
+
+/** A rule and its own top-level heading keep the timeline from reading as more job description. */
+export function emailChildren(email: CapturedEmail, startSection = false): NotionBlock[] {
   const sender = email.address ? `${email.from} <${email.address}>` : email.from
   const received = [sender && `From: ${sender}`, email.sentAt && `Received: ${email.sentAt}`].filter(Boolean).join('\n')
-  const blocks: NotionBlock[] = [
+  const blocks: NotionBlock[] = [{ object: 'block', type: 'divider', divider: {} }]
+  if (startSection) {
+    blocks.push({ object: 'block', type: 'heading_1', heading_1: { rich_text: richText([{ text: CORRESPONDENCE }]) } })
+  }
+  blocks.push(
     { object: 'block', type: 'heading_2', heading_2: { rich_text: richText([{ text: email.subject || '(no subject)' }]) } },
-  ]
+  )
   if (received) blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: richText([{ text: received }]) } })
   const body: JdBlock[] = email.blocks.length
     ? email.blocks
@@ -165,11 +172,28 @@ export async function listJobs(): Promise<SavedJob[]> {
   }))
 }
 
+/** The heading is written once; later messages join the section instead of opening a new one. */
+async function hasSection(token: string, pageId: string, title: string): Promise<boolean> {
+  let cursor: string | undefined
+  do {
+    const path = `/blocks/${pageId}/children?page_size=100${cursor ? `&start_cursor=${cursor}` : ''}`
+    const page = await notionRequest<{
+      results: { type: string; heading_1?: { rich_text: { plain_text?: string }[] } }[]
+      has_more?: boolean; next_cursor?: string | null
+    }>(token, 'GET', path)
+    const found = page.results.some(block => block.type === 'heading_1'
+      && (block.heading_1?.rich_text || []).map(part => part.plain_text || '').join('').trim() === title)
+    if (found) return true
+    cursor = page.has_more ? page.next_cursor || undefined : undefined
+  } while (cursor)
+  return false
+}
+
 export async function appendEmail(pageId: string, email: CapturedEmail, rejectionReason = ''): Promise<void> {
   const { token, id } = await dataSource()
   await ensureProperties(token, id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
 
-  const children = emailChildren(email)
+  const children = emailChildren(email, !await hasSection(token, pageId, CORRESPONDENCE))
   for (let index = 0; index < children.length; index += 100) {
     await notionRequest(token, 'PATCH', `/blocks/${pageId}/children`, { children: children.slice(index, index + 100) })
   }

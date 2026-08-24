@@ -150,6 +150,25 @@ Source URL: <stable URL>
 
 Text longer than the Notion rich-text limit is chunked without discarding content.
 
+## Correspondence on the job page
+
+Captured messages append to the same page under a second top-level section, because a Notion property caps at 2000 characters and cannot hold headings, lists or bold — a message would arrive flattened, and a second message would overwrite the first.
+
+```text
+# Job Description Snapshot
+<the JD>
+---
+# Correspondence
+## <subject>
+From: <name> <address>
+Received: <as the client displayed it>
+<the message, verbatim>
+---
+## <next subject>
+```
+
+`appendEmail` reads the page's existing children before writing and only emits the `Correspondence` heading when it is absent, so later messages join the section rather than opening another one. Every entry starts with a rule.
+
 ## Document uploads
 
 - MIME: PDF or DOCX.

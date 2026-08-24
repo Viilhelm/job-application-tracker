@@ -59,28 +59,35 @@ describe('Email timeline entry', () => {
     ],
   }
 
-  it('leads with the subject and records who sent it and when', () => {
-    const blocks = emailChildren(email)
-    expect(blocks.map(typeOf)).toEqual(['heading_2', 'paragraph', 'paragraph', 'paragraph'])
-    expect(bodyOf(blocks[0])[0].text.content).toBe('Your application')
-    expect(bodyOf(blocks[1])[0].text.content)
+  it('is fenced off from the job description by a rule and its own heading', () => {
+    const blocks = emailChildren(email, true)
+    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_1', 'heading_2', 'paragraph', 'paragraph', 'paragraph'])
+    expect(bodyOf(blocks[1])[0].text.content).toBe('Correspondence')
+    expect(bodyOf(blocks[2])[0].text.content).toBe('Your application')
+    expect(bodyOf(blocks[3])[0].text.content)
       .toBe('From: Ariane van der Haegen <ariane@kartesia.com>\nReceived: 2026-08-16T09:12:00Z')
   })
 
+  it('joins the existing section instead of opening a second one', () => {
+    const blocks = emailChildren(email)
+    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_2', 'paragraph', 'paragraph', 'paragraph'])
+    expect(blocks.some(block => typeOf(block) === 'heading_1')).toBe(false)
+  })
+
   it('keeps the body verbatim, in order', () => {
-    expect(emailChildren(email).slice(2).map(block => bodyOf(block)[0].text.content))
+    expect(emailChildren(email).slice(3).map(block => bodyOf(block)[0].text.content))
       .toEqual(['Thank you for applying.', 'We are looking for a Dutch speaker.'])
   })
 
   it('falls back to plain text when a client exposes no structure', () => {
     const blocks = emailChildren({ ...email, blocks: [], text: 'First line.\n\nSecond line.' })
-    expect(blocks.slice(2).map(block => bodyOf(block)[0].text.content)).toEqual(['First line.', 'Second line.'])
+    expect(blocks.slice(3).map(block => bodyOf(block)[0].text.content)).toEqual(['First line.', 'Second line.'])
   })
 
   it('still writes an entry when the sender could not be read', () => {
     const blocks = emailChildren({ ...email, from: '', address: '', sentAt: '', subject: '' })
-    expect(blocks.map(typeOf)).toEqual(['heading_2', 'paragraph', 'paragraph'])
-    expect(bodyOf(blocks[0])[0].text.content).toBe('(no subject)')
+    expect(blocks.map(typeOf)).toEqual(['divider', 'heading_2', 'paragraph', 'paragraph'])
+    expect(bodyOf(blocks[1])[0].text.content).toBe('(no subject)')
   })
 })
 
