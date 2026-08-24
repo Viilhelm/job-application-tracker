@@ -115,6 +115,7 @@ JobVault automatically creates **Job Applications** under the configured parent 
 15. Rejection Reason
 16. Contact Email
 17. Last Contact
+18. Messages (rollup, added once correspondence exists)
 
 There is no Source or Match Score property. Motivation-letter and cover-letter uploads both use Application Letter. Location holds the place only; Remote, Hybrid and On-site live in the Work Mode select so the board can filter on them.
 

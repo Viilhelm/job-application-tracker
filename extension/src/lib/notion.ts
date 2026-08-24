@@ -219,6 +219,31 @@ export async function findMessage(email: CapturedEmail): Promise<string | null> 
   return found.results.length ? found.results[0].url : null
 }
 
+/**
+ * The relation Notion creates for the dual link is named by Notion, not by us, so it is found by
+ * what it points at rather than by a name that could differ per workspace or language.
+ */
+async function relationTo(token: string, jobsDataSourceId: string, mailDataSourceId: string): Promise<string> {
+  const source = await notionRequest<{
+    properties: Record<string, { type?: string; relation?: { data_source_id?: string } }>
+  }>(token, 'GET', `/data_sources/${jobsDataSourceId}`)
+  if ('Messages' in source.properties) return ''
+  const found = Object.entries(source.properties).find(([, property]) =>
+    property.type === 'relation' && property.relation?.data_source_id === mailDataSourceId)
+  return found?.[0] || ''
+}
+
+/** A count of related messages, so a row with no reply is visible without opening it. */
+async function ensureMessageCount(token: string, jobsDataSourceId: string, mailDataSourceId: string): Promise<void> {
+  const relation = await relationTo(token, jobsDataSourceId, mailDataSourceId)
+  if (!relation) return
+  const rollup = (fn: string) => notionRequest(token, 'PATCH', `/data_sources/${jobsDataSourceId}`, {
+    properties: { 'Messages': { rollup: { relation_property_name: relation, rollup_property_name: 'Subject', function: fn } } },
+  })
+  // Notion has renamed this function across API versions; the older name is the fallback.
+  try { await rollup('count') } catch { await rollup('count_all') }
+}
+
 export async function saveEmail(jobPageId: string, email: CapturedEmail, rejectionReason = ''): Promise<string> {
   const existing = await findMessage(email)
   if (existing) return existing
@@ -253,6 +278,8 @@ export async function saveEmail(jobPageId: string, email: CapturedEmail, rejecti
     jobProperties['Rejection Reason'] = { select: { name: rejectionReason } }
   }
   await notionRequest(jobs.token, 'PATCH', `/pages/${jobPageId}`, { properties: jobProperties })
+  // Best effort: a missing count is cosmetic and must not fail a message that is already filed.
+  try { await ensureMessageCount(jobs.token, jobs.id, mail.id) } catch { /* leave the count to the next save */ }
   return page.url
 }
 

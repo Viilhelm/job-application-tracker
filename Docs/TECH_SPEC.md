@@ -167,6 +167,8 @@ A second database, **Correspondence**, is created next to Job Applications on th
 
 The relation is `dual_property`, so Notion creates the matching property on Job Applications itself; the job row then links to every message under it. The message body is the page content of its own record, with links and bold intact.
 
+After the first message is filed, Job Applications gains a `Messages` rollup counting the related records, so a row that never got a reply is visible without opening it. The relation it rolls up is found by which data source it points at, because Notion names that property itself and the name varies by workspace and language. Adding the rollup is best effort: a missing count is cosmetic and never fails a message that is already saved.
+
 Job Applications still carries `Contact Email`, `Last Contact` and `Rejection Reason`, because those describe the application rather than any one message. `Last Contact` uses the parsed date when it was unambiguous and the capture time otherwise.
 
 Each record carries the client's own message id — `MSG_<id>_SUBJECT` on Outlook, `data-message-id` on Gmail — and the panel queries it before offering to save. Reopening the panel on a filed message shows the record instead of the form; without this the same message would be filed again on every visit. When a client exposes no id, sender, subject and date stand in, which is stable for the same message.
