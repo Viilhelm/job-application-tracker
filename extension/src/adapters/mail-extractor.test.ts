@@ -79,6 +79,25 @@ describe('Gmail thread', () => {
   })
 })
 
+describe('Narrow Outlook layout', () => {
+  it('finds the subject when it sits above the reading pane', () => {
+    document.body.innerHTML = `<div><span id="CONV_abc_SUBJECT">Precis - A Quick Update</span>
+      <div id="ReadingPaneContainerId"><span class="OZZZK">Diana Miguel&lt;diana@precis.example&gt;</span>
+        <div id="MSG_Alho1NKAAAA_DATETIME">周一 2026/8/31 17:58</div>
+        <div role="document" id="UniqueMessageBody_2"><p>Hi Alex,</p></div>
+      </div></div>`
+    const email = extractEmail(document, 'outlook')!
+    expect(email.subject).toBe('Precis - A Quick Update')
+    expect(email.messageId).toBe('Alho1NKAAAA')
+  })
+
+  it('does not widen the search on Gmail, where the selector is not specific', () => {
+    document.body.innerHTML = `<h2>Inbox</h2><div role="main">
+      <div class="a3s"><p>Are you free on Tuesday?</p></div></div>`
+    expect(extractEmail(document, 'gmail')!.subject).toBe('')
+  })
+})
+
 describe('Message identity', () => {
   it('falls back to sender, subject and date when the client exposes no id', () => {
     document.body.innerHTML = `<div role="main"><h2>Interview invitation</h2>

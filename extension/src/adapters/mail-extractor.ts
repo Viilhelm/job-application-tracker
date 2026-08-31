@@ -88,9 +88,12 @@ export function extractEmail(root: ParentNode = document, client: MailClient): C
   if (!pane || !body) return null
   const blocks = domBlocks(body)
   if (!blocks.length) return null
-  const subject = [...pane.querySelectorAll(SUBJECTS[client])]
+  const subjectIn = (scope: ParentNode) => [...scope.querySelectorAll(SUBJECTS[client])]
     .filter(node => !body.contains(node))
     .map(node => clean(node.textContent)).find(Boolean) || ''
+  // A narrow Outlook window moves the subject to a bar above the pane. Widening the search is safe
+  // only there: `[id$="_SUBJECT"]` is specific to the open message, while Gmail's `h2` is not.
+  const subject = subjectIn(pane) || (client === 'outlook' ? subjectIn(root) : '')
   const sentAt = findSentAt(pane, client)
   const sender = findSender(pane, body)
   return {
