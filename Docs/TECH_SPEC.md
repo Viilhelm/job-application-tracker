@@ -174,6 +174,8 @@ After the first message is filed, Job Applications gains a `Messages` rollup cou
 
 Job Applications still carries `Contact Email`, `Last Contact` and `Rejection Reason`, because those describe the application rather than any one message. `Last Contact` uses the parsed date when it was unambiguous and the capture time otherwise.
 
+Outlook writes the subject into its element after the body is already rendered, so reading as soon as the message appears can capture an empty one — the same message read again a moment later has it. Extraction therefore keeps retrying while the subject is missing, up to about a second, before accepting what it has.
+
 Outlook does not always expose the subject. A single message outside a conversation renders an empty `_SUBJECT` and keeps the text out of the reachable DOM entirely — it is not in the tab title either. Rather than store "(no subject)", `messageTitle` names the record by sender and date, which are always available; the title stays editable in Notion and the record's identity never depended on the subject.
 
 Opening the panel on a filed message shows the same form with its current values, so the application it hangs under and the rejection reason can be corrected without leaving the mail tab. A checkbox replaces the stored subject and body with what the page shows now, which repairs an older record after an extraction fix; it defaults to on when the stored subject differs from what is read today. Moving a message writes the contact fields onto the newly chosen application and leaves the previous one as it was, since another message may be why it holds those values.
