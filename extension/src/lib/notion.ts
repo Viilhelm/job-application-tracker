@@ -151,6 +151,14 @@ export function messageChildren(email: CapturedEmail): NotionBlock[] {
 /** Identity, so reopening the panel on a message already filed cannot create a second record. */
 const MESSAGE_ID: Record<string, unknown> = { 'Message ID': { rich_text: {} } }
 
+/**
+ * Read through the relation rather than copied onto the message. The company belongs to the
+ * application; a second stored copy would silently disagree the moment the application is edited.
+ */
+const COMPANY_ROLLUP: Record<string, unknown> = {
+  'Company': { rollup: { relation_property_name: 'Application', rollup_property_name: 'Company', function: 'show_original' } },
+}
+
 const CORRESPONDENCE_PROPERTIES = (jobsDataSourceId: string): Record<string, unknown> => ({
   'Subject': { title: {} },
   ...MESSAGE_ID,
@@ -233,6 +241,11 @@ async function relationTo(token: string, jobsDataSourceId: string, mailDataSourc
   return found?.[0] || ''
 }
 
+/** Shows the company on the message list itself, so scanning it needs no click-through. */
+async function ensureCompanyRollup(token: string, mailDataSourceId: string): Promise<void> {
+  await ensureProperties(token, mailDataSourceId, ['Company'], COMPANY_ROLLUP)
+}
+
 /** A count of related messages, so a row with no reply is visible without opening it. */
 async function ensureMessageCount(token: string, jobsDataSourceId: string, mailDataSourceId: string): Promise<void> {
   const relation = await relationTo(token, jobsDataSourceId, mailDataSourceId)
@@ -278,8 +291,9 @@ export async function saveEmail(jobPageId: string, email: CapturedEmail, rejecti
     jobProperties['Rejection Reason'] = { select: { name: rejectionReason } }
   }
   await notionRequest(jobs.token, 'PATCH', `/pages/${jobPageId}`, { properties: jobProperties })
-  // Best effort: a missing count is cosmetic and must not fail a message that is already filed.
+  // Best effort: these are conveniences and must not fail a message that is already filed.
   try { await ensureMessageCount(jobs.token, jobs.id, mail.id) } catch { /* leave the count to the next save */ }
+  try { await ensureCompanyRollup(mail.token, mail.id) } catch { /* leave the company to the next save */ }
   return page.url
 }
 

@@ -164,8 +164,11 @@ A second database, **Correspondence**, is created next to Job Applications on th
 | From Email | Email |
 | Received | Date |
 | Application | Relation to Job Applications (dual) |
+| Company | Rollup through Application |
 
 The relation is `dual_property`, so Notion creates the matching property on Job Applications itself; the job row then links to every message under it. The message body is the page content of its own record, with links and bold intact.
+
+`Company` is a rollup through the relation, not a copied value: the company belongs to the application, and a second stored copy would disagree the moment the application is edited. Both rollups are added on the first save rather than at creation, because a rollup cannot reference a relation defined in the same request.
 
 After the first message is filed, Job Applications gains a `Messages` rollup counting the related records, so a row that never got a reply is visible without opening it. The relation it rolls up is found by which data source it points at, because Notion names that property itself and the name varies by workspace and language. Adding the rollup is best effort: a missing count is cosmetic and never fails a message that is already saved.
 
