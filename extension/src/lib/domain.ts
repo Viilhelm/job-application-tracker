@@ -11,6 +11,17 @@ export type CapturedEmail = { messageId: string; from: string; address: string; 
 export type SavedJob = { id: string; company: string; position: string; status: string; url: string; rejectionReason: string }
 export type FiledMessage = { id: string; url: string; applicationId: string; subject: string }
 
+/**
+ * Outlook does not always put the subject anywhere reachable — a single message outside a
+ * conversation renders an empty `_SUBJECT` and keeps the text out of the DOM. Sender and date are
+ * always available, and name the record far better than "(no subject)". Editable in Notion after.
+ */
+export function messageTitle(email: CapturedEmail): string {
+  return email.subject
+    || [email.from || email.address, email.sentAt].filter(Boolean).join(' · ')
+    || '(no subject)'
+}
+
 export type JdSpan = { text: string; href?: string; bold?: boolean }
 /** `spans` is only set when the block carries links; its concatenated text always equals `text`. */
 export type JdBlock = { type: 'heading_2' | 'heading_3' | 'paragraph' | 'bulleted_list_item' | 'numbered_list_item'; text: string; spans?: JdSpan[] }

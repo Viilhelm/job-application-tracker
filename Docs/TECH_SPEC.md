@@ -106,7 +106,7 @@ Application statuses, employment types and work modes are defined in `src/lib/do
 | | Outlook web | Gmail |
 |---|---|---|
 | Body | `[id^="UniqueMessageBody"]`, `[role="document"]` | `.a3s`, `[data-message-id] [dir="ltr"]` |
-| Subject | `[id$="_SUBJECT"]` | `h2` |
+| Subject | `[id$="_SUBJECT"]`, pane then document | `h2` in the pane |
 | Sender | text node `Name<address>` | `[email]` / `[jid]` / `[data-hovercard-id]` |
 | Date | `[id$="_DATETIME"]` | `[title]` holding a year |
 
@@ -173,6 +173,8 @@ The relation is `dual_property`, so Notion creates the matching property on Job 
 After the first message is filed, Job Applications gains a `Messages` rollup counting the related records, so a row that never got a reply is visible without opening it. The relation it rolls up is found by which data source it points at, because Notion names that property itself and the name varies by workspace and language. Adding the rollup is best effort: a missing count is cosmetic and never fails a message that is already saved.
 
 Job Applications still carries `Contact Email`, `Last Contact` and `Rejection Reason`, because those describe the application rather than any one message. `Last Contact` uses the parsed date when it was unambiguous and the capture time otherwise.
+
+Outlook does not always expose the subject. A single message outside a conversation renders an empty `_SUBJECT` and keeps the text out of the reachable DOM entirely — it is not in the tab title either. Rather than store "(no subject)", `messageTitle` names the record by sender and date, which are always available; the title stays editable in Notion and the record's identity never depended on the subject.
 
 Opening the panel on a filed message shows the same form with its current values, so the application it hangs under and the rejection reason can be corrected without leaving the mail tab. A checkbox replaces the stored subject and body with what the page shows now, which repairs an older record after an extraction fix; it defaults to on when the stored subject differs from what is read today. Moving a message writes the contact fields onto the newly chosen application and leaves the previous one as it was, since another message may be why it holds those values.
 

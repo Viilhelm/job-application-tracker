@@ -1,4 +1,4 @@
-import { canonicalizeUrl, REJECTION_REASONS, type CapturedEmail, type FiledMessage, type JdBlock, type Job, type JobResponse, type JdSpan, type SavedJob } from './domain'
+import { canonicalizeUrl, messageTitle, REJECTION_REASONS, type CapturedEmail, type FiledMessage, type JdBlock, type Job, type JobResponse, type JdSpan, type SavedJob } from './domain'
 import { NotionError, notionRequest, readSettings, writeSettings } from './notion-client'
 
 /** Order used when the database is first created; Notion view order is the user's afterwards. */
@@ -258,7 +258,7 @@ export async function updateMessage(
   const properties: Record<string, unknown> = { 'Application': { relation: [{ id: jobPageId }] } }
   const received = resync?.sentAtIso || new Date().toISOString()
   if (resync) {
-    properties['Subject'] = { title: [{ text: { content: resync.subject || '(no subject)' } }] }
+    properties['Subject'] = { title: [{ text: { content: messageTitle(resync) } }] }
     properties['Received'] = { date: { start: received } }
     if (resync.from) properties['From'] = { rich_text: [{ text: { content: resync.from } }] }
     if (resync.address) properties['From Email'] = { email: resync.address }
@@ -329,7 +329,7 @@ export async function saveEmail(jobPageId: string, email: CapturedEmail, rejecti
 
   const received = email.sentAtIso || new Date().toISOString()
   const properties: Record<string, unknown> = {
-    'Subject': { title: [{ text: { content: email.subject || '(no subject)' } }] },
+    'Subject': { title: [{ text: { content: messageTitle(email) } }] },
     'Message ID': { rich_text: [{ text: { content: email.messageId } }] },
     'Received': { date: { start: received } },
     'Application': { relation: [{ id: jobPageId }] },

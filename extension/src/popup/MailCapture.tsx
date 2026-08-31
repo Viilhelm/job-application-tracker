@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { REJECTION_REASONS, type CapturedEmail, type FiledMessage, type SavedJob } from '../lib/domain'
+import { messageTitle, REJECTION_REASONS, type CapturedEmail, type FiledMessage, type SavedJob } from '../lib/domain'
 import { matchJob } from '../lib/match'
 import { findMessage, listJobs, saveEmail, updateMessage } from '../lib/notion'
 
@@ -26,7 +26,7 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
           setPick(already.applicationId)
           setReason(found.find(job => job.id === already.applicationId)?.rejectionReason || '')
           // Improved extraction can read a message better than the stored copy; offer to refresh it.
-          setResync(already.subject !== (email.subject || '(no subject)'))
+          setResync(already.subject !== messageTitle(email))
           setState('filed')
           return
         }
@@ -75,7 +75,7 @@ export function MailCapture({ email }: { email: CapturedEmail }) {
     <header><div className="mark">JV</div><div><h1>JobVault</h1><p>Attach this email to an application</p></div></header>
 
     <div className="jd-captured">
-      <span>✓ {email.subject || '(no subject)'}</span>
+      <span>✓ {messageTitle(email)}</span>
       <small>{email.from || email.address || 'Unknown sender'}{email.sentAt ? ` · ${email.sentAt}` : ''}</small>
     </div>
     <p className="mail-preview">{preview}{preview.length >= 240 ? '…' : ''}</p>

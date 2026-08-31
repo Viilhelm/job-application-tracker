@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Job } from './domain'
+import { messageTitle, type Job } from './domain'
 import { extractNotionId } from './notion-client'
 import { jdChildren, messageChildren, splitWorkMode, type NotionBlock, type NotionRichText } from './notion'
 
@@ -81,6 +81,26 @@ describe('Captured message body', () => {
       { type: 'text', text: { content: 'our team', link: { url: 'https://hero.example/contact' } } },
       { type: 'text', text: { content: ' soon' }, annotations: { bold: true } },
     ])
+  })
+})
+
+describe('Message title', () => {
+  const base = {
+    messageId: 'm', from: 'Netcompany SEE & BELUX', address: 'notification@smartrecruiters.com',
+    subject: '', sentAt: '周一 2026/8/31 1:58', sentAtIso: '', text: '', blocks: [],
+  }
+
+  it('uses the subject when the client exposes one', () => {
+    expect(messageTitle({ ...base, subject: 'Thank you for applying' })).toBe('Thank you for applying')
+  })
+
+  it('names the record by sender and date when Outlook hides the subject', () => {
+    expect(messageTitle(base)).toBe('Netcompany SEE & BELUX · 周一 2026/8/31 1:58')
+  })
+
+  it('falls back to the address, then to a placeholder', () => {
+    expect(messageTitle({ ...base, from: '' })).toBe('notification@smartrecruiters.com · 周一 2026/8/31 1:58')
+    expect(messageTitle({ ...base, from: '', address: '', sentAt: '' })).toBe('(no subject)')
   })
 })
 
