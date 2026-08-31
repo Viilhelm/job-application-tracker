@@ -3,7 +3,7 @@ import type { CapturedEmail, SavedJob } from './domain'
 import { matchJob } from './match'
 
 const job = (company: string, position = 'Engineer'): SavedJob =>
-  ({ id: company, company, position, status: 'Applied', url: 'https://notion.so/x' })
+  ({ id: company, company, position, status: 'Applied', url: 'https://notion.so/x', rejectionReason: '' })
 
 const email = (overrides: Partial<CapturedEmail>): CapturedEmail => ({
   messageId: 'm1', from: '', address: '', subject: '', sentAt: '', sentAtIso: '', text: '', blocks: [], ...overrides,

@@ -174,6 +174,8 @@ After the first message is filed, Job Applications gains a `Messages` rollup cou
 
 Job Applications still carries `Contact Email`, `Last Contact` and `Rejection Reason`, because those describe the application rather than any one message. `Last Contact` uses the parsed date when it was unambiguous and the capture time otherwise.
 
+Opening the panel on a filed message shows the same form with its current values, so the application it hangs under and the rejection reason can be corrected without leaving the mail tab. A checkbox replaces the stored subject and body with what the page shows now, which repairs an older record after an extraction fix; it defaults to on when the stored subject differs from what is read today. Moving a message writes the contact fields onto the newly chosen application and leaves the previous one as it was, since another message may be why it holds those values.
+
 Each record carries the client's own message id — `MSG_<id>_SUBJECT` on Outlook, `data-message-id` on Gmail — and the panel queries it before offering to save. Reopening the panel on a filed message shows the record instead of the form; without this the same message would be filed again on every visit. When a client exposes no id, sender, subject and date stand in, which is stable for the same message.
 
 Settings exposes the Correspondence database id the same way as the jobs database, so clearing extension storage cannot silently create a duplicate.

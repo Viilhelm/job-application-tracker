@@ -1,4 +1,4 @@
-import { canonicalizeUrl, REJECTION_REASONS, type CapturedEmail, type JdBlock, type Job, type JobResponse, type JdSpan, type SavedJob } from './domain'
+import { canonicalizeUrl, REJECTION_REASONS, type CapturedEmail, type FiledMessage, type JdBlock, type Job, type JobResponse, type JdSpan, type SavedJob } from './domain'
 import { NotionError, notionRequest, readSettings, writeSettings } from './notion-client'
 
 /** Order used when the database is first created; Notion view order is the user's afterwards. */
@@ -42,6 +42,7 @@ type NotionProperty = {
   rich_text?: { plain_text?: string }[]
   title?: { plain_text?: string }[]
   select?: { name?: string } | null
+  relation?: { id: string }[]
 }
 type NotionPage = { id: string; url: string; properties?: Record<string, NotionProperty> }
 type QueryResult = { results: NotionPage[]; has_more?: boolean; next_cursor?: string | null }
@@ -209,7 +210,7 @@ async function correspondenceSource(): Promise<{ token: string; id: string }> {
 }
 
 /** Returns the record's URL when this message is already filed, so the panel can say so. */
-export async function findMessage(email: CapturedEmail): Promise<string | null> {
+export async function findMessage(email: CapturedEmail): Promise<FiledMessage | null> {
   if (!email.messageId) return null
   const mail = await correspondenceSource()
   const query = () => notionRequest<QueryResult>(mail.token, 'POST', `/data_sources/${mail.id}/query`, {
@@ -224,7 +225,57 @@ export async function findMessage(email: CapturedEmail): Promise<string | null> 
     await ensureProperties(mail.token, mail.id, ['Message ID'], MESSAGE_ID)
     found = await query()
   }
-  return found.results.length ? found.results[0].url : null
+  const page = found.results[0]
+  if (!page) return null
+  return {
+    id: page.id,
+    url: page.url,
+    applicationId: page.properties?.Application?.relation?.[0]?.id || '',
+    subject: plain(page, 'Subject'),
+  }
+}
+
+/** Replaces the stored message body; used when improved extraction fixes an older record. */
+async function replaceChildren(token: string, pageId: string, children: NotionBlock[]): Promise<void> {
+  for (;;) {
+    const existing = await notionRequest<{ results: { id: string }[] }>(token, 'GET', `/blocks/${pageId}/children?page_size=100`)
+    if (!existing.results.length) break
+    for (const block of existing.results) await notionRequest(token, 'DELETE', `/blocks/${block.id}`)
+  }
+  for (let index = 0; index < children.length; index += 100) {
+    await notionRequest(token, 'PATCH', `/blocks/${pageId}/children`, { children: children.slice(index, index + 100) })
+  }
+}
+
+/**
+ * Moving a message writes the contact fields onto the newly chosen application; the previous one
+ * keeps what it already had, since another message may well be the reason it holds those values.
+ */
+export async function updateMessage(
+  filed: FiledMessage, jobPageId: string, rejectionReason: string, resync: CapturedEmail | null,
+): Promise<void> {
+  const mail = await correspondenceSource()
+  const properties: Record<string, unknown> = { 'Application': { relation: [{ id: jobPageId }] } }
+  const received = resync?.sentAtIso || new Date().toISOString()
+  if (resync) {
+    properties['Subject'] = { title: [{ text: { content: resync.subject || '(no subject)' } }] }
+    properties['Received'] = { date: { start: received } }
+    if (resync.from) properties['From'] = { rich_text: [{ text: { content: resync.from } }] }
+    if (resync.address) properties['From Email'] = { email: resync.address }
+  }
+  await notionRequest(mail.token, 'PATCH', `/pages/${filed.id}`, { properties })
+  if (resync) await replaceChildren(mail.token, filed.id, messageChildren(resync))
+
+  const jobs = await dataSource()
+  const jobProperties: Record<string, unknown> = {}
+  if (resync?.address) jobProperties['Contact Email'] = { email: resync.address }
+  if (resync) jobProperties['Last Contact'] = { date: { start: received } }
+  if (rejectionReason && REJECTION_REASONS.includes(rejectionReason as typeof REJECTION_REASONS[number])) {
+    jobProperties['Rejection Reason'] = { select: { name: rejectionReason } }
+  }
+  if (Object.keys(jobProperties).length) {
+    await notionRequest(jobs.token, 'PATCH', `/pages/${jobPageId}`, { properties: jobProperties })
+  }
 }
 
 /**
@@ -270,7 +321,7 @@ export async function refreshProperties(): Promise<string> {
 
 export async function saveEmail(jobPageId: string, email: CapturedEmail, rejectionReason = ''): Promise<string> {
   const existing = await findMessage(email)
-  if (existing) return existing
+  if (existing) return existing.url
   const jobs = await dataSource()
   await ensureProperties(jobs.token, jobs.id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
   const mail = await correspondenceSource()
@@ -321,6 +372,7 @@ export async function listJobs(): Promise<SavedJob[]> {
     company: plain(page, 'Company'),
     position: plain(page, 'Position'),
     status: page.properties?.Status?.select?.name || '',
+    rejectionReason: page.properties?.['Rejection Reason']?.select?.name || '',
   }))
 }
 

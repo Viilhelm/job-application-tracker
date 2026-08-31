@@ -8,7 +8,8 @@ export const REJECTION_REASONS = ['', 'Language requirement', 'Experience or ski
 
 /** One captured message. `blocks` reuses JdBlock because Notion renders both the same way. */
 export type CapturedEmail = { messageId: string; from: string; address: string; subject: string; sentAt: string; sentAtIso: string; text: string; blocks: JdBlock[] }
-export type SavedJob = { id: string; company: string; position: string; status: string; url: string }
+export type SavedJob = { id: string; company: string; position: string; status: string; url: string; rejectionReason: string }
+export type FiledMessage = { id: string; url: string; applicationId: string; subject: string }
 
 export type JdSpan = { text: string; href?: string; bold?: boolean }
 /** `spans` is only set when the block carries links; its concatenated text always equals `text`. */

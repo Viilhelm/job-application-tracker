@@ -9,3 +9,6 @@ body{width:auto;min-width:360px;min-height:100vh}
 .optional{font-weight:400;color:#8a948d;font-size:11px}
 .message a{color:#276447}
 .match-reason{font-size:11px;color:#5a655e;margin:-4px 0 0;line-height:1.5}
+.checkbox{flex-direction:row;align-items:flex-start;gap:9px;font-weight:400;color:#455149;font-size:12px;line-height:1.5}
+.checkbox input{width:auto;margin-top:2px;flex:none}
+.checkbox small{display:block;color:#78827c;margin-top:2px}
