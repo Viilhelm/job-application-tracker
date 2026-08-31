@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { extractNotionId, readSettings, verifyToken, writeSettings } from '../lib/notion-client'
-import { migrateWorkMode } from '../lib/notion'
+import { migrateWorkMode, refreshProperties } from '../lib/notion'
 import './options.css'
 
 function Options() {
@@ -63,6 +63,18 @@ function Options() {
     }
   }
 
+  async function refresh() {
+    setMessage('Checking Notion properties…')
+    setFailed(false)
+    try {
+      await refreshProperties()
+      setMessage('Notion properties are up to date.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not update the properties')
+      setFailed(true)
+    }
+  }
+
   return <main>
     <h1>JobVault settings</h1>
     <p>JobVault talks to Notion directly from your browser. Nothing is sent to any other server.</p>
@@ -104,6 +116,8 @@ function Options() {
     <h2>Maintenance</h2>
     <p className="hint">Older rows stored the work mode inside Location, as “City · Hybrid”. Run this once to move it into the Work Mode property. Rows without a recognizable mode are left untouched.</p>
     <button type="button" className="secondary" onClick={migrate}>Split legacy Location values</button>
+    <p className="hint">Adds any property a newer version introduced — the message id, the company shown on each message, and the count of messages on each application. Safe to run at any time; existing values are untouched.</p>
+    <button type="button" className="secondary" onClick={refresh}>Add missing Notion properties</button>
   </main>
 }
 

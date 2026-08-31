@@ -257,6 +257,17 @@ async function ensureMessageCount(token: string, jobsDataSourceId: string, mailD
   try { await rollup('count') } catch { await rollup('count_all') }
 }
 
+/** Adds the convenience columns without waiting for the next saved message. */
+export async function refreshProperties(): Promise<string> {
+  const jobs = await dataSource()
+  await ensureProperties(jobs.token, jobs.id, ['Rejection Reason', 'Contact Email', 'Last Contact'])
+  const mail = await correspondenceSource()
+  await ensureProperties(mail.token, mail.id, ['Message ID'], MESSAGE_ID)
+  await ensureCompanyRollup(mail.token, mail.id)
+  await ensureMessageCount(jobs.token, jobs.id, mail.id)
+  return CORRESPONDENCE
+}
+
 export async function saveEmail(jobPageId: string, email: CapturedEmail, rejectionReason = ''): Promise<string> {
   const existing = await findMessage(email)
   if (existing) return existing
